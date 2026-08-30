@@ -57,16 +57,16 @@ func (s *Socket) request(request string) (string, error) {
 	return string(responseBytes), nil
 }
 
-func (s *Socket) Clients() (string, error) {
+func (s *Socket) Clients() ([]Client, error) {
 	response, err := s.request("[j]/clients")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if response == "unknown request" {
-		return "", errors.New(response)
+		return nil, errors.New(response)
 	}
 
-	return response, nil
+	return nil, nil
 }
 
 func (s *Socket) Notify(message string) error {
