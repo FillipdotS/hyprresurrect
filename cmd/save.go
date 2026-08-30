@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 	"github.com/spf13/cobra"
 )
@@ -20,5 +22,16 @@ func init() {
 func save() error {
 	c := hypr.New()
 
-	return c.Notify("hyprresurrect - saving...")
+	if err := c.Notify("hyprresurrect - saving..."); err != nil {
+		return err
+	}
+
+	clients, err := c.Clients()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(clients)
+
+	return nil
 }

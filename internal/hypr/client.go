@@ -2,6 +2,7 @@
 package hypr
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -49,6 +50,18 @@ func (c *Client) request(request string) (string, error) {
 	}
 
 	return string(responseBytes), nil
+}
+
+func (c *Client) Clients() (string, error) {
+	response, err := c.request("[j]/clients")
+	if err != nil {
+		return "", err
+	}
+	if response == "unknown request" {
+		return "", errors.New(response)
+	}
+
+	return response, nil
 }
 
 func (c *Client) Notify(message string) error {
