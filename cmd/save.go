@@ -8,8 +8,8 @@ import (
 var saveCmd = &cobra.Command{
 	Use:   "save",
 	Short: "Saves the current tile layout",
-	Run: func(cmd *cobra.Command, args []string) {
-		save()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return save()
 	},
 }
 
@@ -17,6 +17,8 @@ func init() {
 	rootCmd.AddCommand(saveCmd)
 }
 
-func save() {
-	hypr.Notify("hyprresurrect - saving layout...")
+func save() error {
+	c := hypr.New()
+
+	return c.Notify("hyprresurrect - saving...")
 }

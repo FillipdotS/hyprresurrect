@@ -8,63 +8,57 @@ import (
 	"os"
 )
 
-type Hypr struct {
+type Client struct {
 	addr *net.UnixAddr
 }
 
-var addr *net.UnixAddr
-
-func init() {
+func New() *Client {
 	his := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
 	xdg := os.Getenv("XDG_RUNTIME_DIR")
 
 	if his == "" {
-		panic("HIS (Hyprland Instance Signature) not found as env var!")
+		panic("HYPRLAND_INSTANCE_SIGNATURE not found as env var!")
 	}
 	if xdg == "" {
 		panic("XDG_RUNTIME_DIR not found as env var!")
 	}
 
-	fmt.Println("HIS found:", his)
-	fmt.Println("XDG_RUNTIME_DIR found:", his)
+	a := net.UnixAddr{Name: fmt.Sprintf("%s/hypr/%s/.socket.sock", xdg, his), Net: "unix"}
 
-	address := fmt.Sprintf("%s/hypr/%s/.socket.sock", xdg, his)
-	addr = &net.UnixAddr{Name: address, Net: "unix"}
+	return &Client{
+		addr: &a,
+	}
 }
 
-func new() *net.UnixConn {
-	c, err := net.DialUnix("unix", nil, addr)
+// sends one command and returns hyprland's raw reply
+func (c *Client) request(request string) (string, error) {
+	conn, err := net.DialUnix("unix", nil, c.addr)
 	if err != nil {
-		panic(err)
+		return "", err
+	}
+	defer func() { _ = conn.Close() }()
+
+	_, err = conn.Write([]byte(request))
+	if err != nil {
+		return "", err
 	}
 
-	return c
+	responseBytes, err := io.ReadAll(conn)
+	if err != nil {
+		return "", err
+	}
+
+	return string(responseBytes), nil
 }
 
-func Notify(message string) {
-	c := new()
-
-	command := fmt.Appendf(nil, "/notify 2 10000 %s %s", "rgb(ff1ea3)", message)
-
-	_, err := c.Write(command)
+func (c *Client) Notify(message string) error {
+	response, err := c.request(fmt.Sprintf("/notify 2 10000 %s %s", "rgb(ff1ea3)", message))
 	if err != nil {
-		panic(err)
+		return err
+	}
+	if response != "ok" {
+		return fmt.Errorf("notify rejected: %s", response)
 	}
 
-	r, err := io.ReadAll(c)
-	if err != nil {
-		panic(err)
-	}
-
-	resp := string(r)
-	if resp != "ok" {
-		panic(resp)
-	}
-
-	fmt.Println(resp)
-
-	err = c.Close()
-	if err != nil {
-		panic(err)
-	}
+	return nil
 }
