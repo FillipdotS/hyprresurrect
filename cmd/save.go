@@ -20,7 +20,10 @@ func init() {
 }
 
 func save() error {
-	c := hypr.New()
+	c, err := hypr.NewFromEnv()
+	if err != nil {
+		return err
+	}
 
 	if err := c.Notify("hyprresurrect - saving..."); err != nil {
 		return err

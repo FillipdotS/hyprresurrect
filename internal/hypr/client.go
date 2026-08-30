@@ -7,31 +7,36 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 )
 
 type Client struct {
 	addr *net.UnixAddr
 }
 
-func New() *Client {
-	his := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
-	xdg := os.Getenv("XDG_RUNTIME_DIR")
-
-	if his == "" {
-		panic("HYPRLAND_INSTANCE_SIGNATURE not found as env var!")
-	}
-	if xdg == "" {
-		panic("XDG_RUNTIME_DIR not found as env var!")
-	}
-
-	a := net.UnixAddr{Name: fmt.Sprintf("%s/hypr/%s/.socket.sock", xdg, his), Net: "unix"}
-
+// New returns a Client that talks to the hyprland socket at sockPath.
+func New(sockPath string) *Client {
 	return &Client{
-		addr: &a,
+		addr: &net.UnixAddr{Name: sockPath, Net: "unix"},
 	}
 }
 
+func NewFromEnv() (*Client, error) {
+	his := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
+	if his == "" {
+		return nil, errors.New("HYPRLAND_INSTANCE_SIGNATURE is not set; is hyprland running?")
+	}
+
+	xdg := os.Getenv("XDG_RUNTIME_DIR")
+	if xdg == "" {
+		return nil, errors.New("XDG_RUNTIME_DIR is not set; required to find hyprland socket")
+	}
+
+	return New(filepath.Join(xdg, "hypr", his, ".socket.sock")), nil
+}
+
 // sends one command and returns hyprland's raw reply
+// format: "[flag(s)]/command args" (i.e. "[j]clients"). See https://wiki.hypr.land/IPC/
 func (c *Client) request(request string) (string, error) {
 	conn, err := net.DialUnix("unix", nil, c.addr)
 	if err != nil {
