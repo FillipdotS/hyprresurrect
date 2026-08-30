@@ -7,13 +7,27 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestClients(t *testing.T) {
-	payload, err := os.ReadFile("testdata/clients.json")
+func serveFixture(t *testing.T, request, file string) *fakeHypr {
+	t.Helper()
+
+	payload, err := os.ReadFile("testdata/" + file)
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 
-	fake := newFakeHypr(t, map[string]string{"[j]/clients": string(payload)})
+	return newFakeHypr(t, map[string]string{request: string(payload)})
+}
+
+func checkRequests(t *testing.T, fake *fakeHypr, want ...string) {
+	t.Helper()
+
+	if diff := cmp.Diff(want, fake.Requests()); diff != "" {
+		t.Errorf("requests mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestClients(t *testing.T) {
+	fake := serveFixture(t, "[j]/clients", "clients.json")
 
 	got, err := New(fake.SockPath).Clients()
 	if err != nil {
@@ -30,7 +44,7 @@ func TestClients(t *testing.T) {
 		InitialClass: "foot",
 		Title:        "becoming you [slow lofi] - snoozy beats | cliamp",
 		InitialTitle: "foot",
-		Workspace:    Workspace{ID: 3, Name: "3"},
+		Workspace:    WorkspaceRef{ID: 3, Name: "3"},
 		MonitorID:    0,
 		At:           [2]int{3628, 30},
 		Size:         [2]int{590, 516},
@@ -42,8 +56,57 @@ func TestClients(t *testing.T) {
 		t.Errorf("Clients()[0] mismatch (-want +got):\n%s", diff)
 	}
 
-	wantReqs := []string{"[j]/clients"}
-	if diff := cmp.Diff(wantReqs, fake.Requests()); diff != "" {
-		t.Errorf("requests mismatch (-want +got):\n%s", diff)
+	checkRequests(t, fake, "[j]/clients")
+}
+
+func TestMonitors(t *testing.T) {
+	fake := serveFixture(t, "[j]/monitors", "monitors.json")
+
+	got, err := New(fake.SockPath).Monitors()
+	if err != nil {
+		t.Fatalf("Monitors() error = %v", err)
 	}
+
+	want := []Monitor{
+		{
+			ID:              0,
+			Name:            "HDMI-A-1",
+			Description:     "LG Electronics LG FHD 407TFNE07679",
+			ActiveWorkspace: WorkspaceRef{ID: 3, Name: "3"},
+		},
+		{
+			ID:              1,
+			Name:            "DP-1",
+			Description:     "Philips Consumer Electronics Company PHL 288E2 UK52308000445",
+			ActiveWorkspace: WorkspaceRef{ID: 5, Name: "5"},
+		},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Monitors() mismatch (-want +got):\n%s", diff)
+	}
+
+	checkRequests(t, fake, "[j]/monitors")
+}
+
+func TestWorkspaces(t *testing.T) {
+	fake := serveFixture(t, "[j]/workspaces", "workspaces.json")
+
+	got, err := New(fake.SockPath).Workspaces()
+	if err != nil {
+		t.Fatalf("Workspaces() error = %v", err)
+	}
+
+	// Hyprland lists these in its own order, not sorted by id.
+	want := []Workspace{
+		{ID: 3, Name: "3", Monitor: "HDMI-A-1", MonitorID: 0, Windows: 3},
+		{ID: 1, Name: "1", Monitor: "DP-1", MonitorID: 1, Windows: 2},
+		{ID: 2, Name: "2", Monitor: "DP-1", MonitorID: 1, Windows: 2},
+		{ID: 4, Name: "4", Monitor: "DP-1", MonitorID: 1, Windows: 2},
+		{ID: 5, Name: "5", Monitor: "DP-1", MonitorID: 1, Windows: 4},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Workspaces() mismatch (-want +got):\n%s", diff)
+	}
+
+	checkRequests(t, fake, "[j]/workspaces")
 }

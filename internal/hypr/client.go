@@ -63,21 +63,29 @@ func (s *Socket) request(request string) ([]byte, error) {
 }
 
 func (s *Socket) Clients() ([]Client, error) {
-	response, err := s.request("[j]/clients")
+	return s.requestList[Client]("[j]/clients")
+}
+
+func (s *Socket) Monitors() ([]Monitor, error) {
+	return s.requestList[Monitor]("[j]/monitors")
+}
+
+func (s *Socket) Workspaces() ([]Workspace, error) {
+	return s.requestList[Workspace]("[j]/workspaces")
+}
+
+func (s *Socket) requestList[T any](request string) ([]T, error) {
+	response, err := s.request(request)
 	if err != nil {
 		return nil, err
 	}
 
-	return parseClients(response)
-}
-
-func parseClients(b []byte) ([]Client, error) {
-	var clients []Client
-	if err := json.Unmarshal(b, &clients); err != nil {
+	var list []T
+	if err := json.Unmarshal(response, &list); err != nil {
 		return nil, err
 	}
 
-	return clients, nil
+	return list, nil
 }
 
 func (s *Socket) Notify(message string) error {
