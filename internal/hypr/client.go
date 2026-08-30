@@ -10,18 +10,18 @@ import (
 	"path/filepath"
 )
 
-type Client struct {
+type Socket struct {
 	addr *net.UnixAddr
 }
 
-// New returns a Client that talks to the hyprland socket at sockPath.
-func New(sockPath string) *Client {
-	return &Client{
+// New returns a Socket that talks to the hyprland socket at sockPath.
+func New(sockPath string) *Socket {
+	return &Socket{
 		addr: &net.UnixAddr{Name: sockPath, Net: "unix"},
 	}
 }
 
-func NewFromEnv() (*Client, error) {
+func NewFromEnv() (*Socket, error) {
 	his := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
 	if his == "" {
 		return nil, errors.New("HYPRLAND_INSTANCE_SIGNATURE is not set; is hyprland running?")
@@ -37,8 +37,8 @@ func NewFromEnv() (*Client, error) {
 
 // sends one command and returns hyprland's raw reply
 // format: "[flag(s)]/command args" (i.e. "[j]clients"). See https://wiki.hypr.land/IPC/
-func (c *Client) request(request string) (string, error) {
-	conn, err := net.DialUnix("unix", nil, c.addr)
+func (s *Socket) request(request string) (string, error) {
+	conn, err := net.DialUnix("unix", nil, s.addr)
 	if err != nil {
 		return "", err
 	}
@@ -57,8 +57,8 @@ func (c *Client) request(request string) (string, error) {
 	return string(responseBytes), nil
 }
 
-func (c *Client) Clients() (string, error) {
-	response, err := c.request("[j]/clients")
+func (s *Socket) Clients() (string, error) {
+	response, err := s.request("[j]/clients")
 	if err != nil {
 		return "", err
 	}
@@ -69,8 +69,8 @@ func (c *Client) Clients() (string, error) {
 	return response, nil
 }
 
-func (c *Client) Notify(message string) error {
-	response, err := c.request(fmt.Sprintf("/notify 2 10000 %s %s", "rgb(ff1ea3)", message))
+func (s *Socket) Notify(message string) error {
+	response, err := s.request(fmt.Sprintf("/notify 2 10000 %s %s", "rgb(ff1ea3)", message))
 	if err != nil {
 		return err
 	}
