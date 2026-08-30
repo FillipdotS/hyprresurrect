@@ -14,7 +14,7 @@ type Client struct {
 	Fullscreen       int       `json:"fullscreen"`
 	FullscreenClient int       `json:"fullscreenClient"`
 	PID              int       `json:"pid"`
-	StableID         int       `json:"stableId"`
+	StableID         string    `json:"stableId"`
 	XDGTag           string    `json:"xdgTag"`
 }
 

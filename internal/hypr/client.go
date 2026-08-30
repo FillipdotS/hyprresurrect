@@ -2,6 +2,7 @@
 package hypr
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -37,24 +38,28 @@ func NewFromEnv() (*Socket, error) {
 
 // sends one command and returns hyprland's raw reply
 // format: "[flag(s)]/command args" (i.e. "[j]clients"). See https://wiki.hypr.land/IPC/
-func (s *Socket) request(request string) (string, error) {
+func (s *Socket) request(request string) ([]byte, error) {
 	conn, err := net.DialUnix("unix", nil, s.addr)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
 	_, err = conn.Write([]byte(request))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	responseBytes, err := io.ReadAll(conn)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return string(responseBytes), nil
+	if string(responseBytes) == "unknown request" {
+		return nil, errors.New("unknown request")
+	}
+
+	return responseBytes, nil
 }
 
 func (s *Socket) Clients() ([]Client, error) {
@@ -62,11 +67,17 @@ func (s *Socket) Clients() ([]Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if response == "unknown request" {
-		return nil, errors.New(response)
+
+	return parseClients(response)
+}
+
+func parseClients(b []byte) ([]Client, error) {
+	var clients []Client
+	if err := json.Unmarshal(b, &clients); err != nil {
+		return nil, err
 	}
 
-	return nil, nil
+	return clients, nil
 }
 
 func (s *Socket) Notify(message string) error {
@@ -74,7 +85,7 @@ func (s *Socket) Notify(message string) error {
 	if err != nil {
 		return err
 	}
-	if response != "ok" {
+	if string(response) != "ok" {
 		return fmt.Errorf("notify rejected: %s", response)
 	}
 
