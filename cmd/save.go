@@ -25,10 +25,6 @@ func save() error {
 		return err
 	}
 
-	if err := s.Notify("hyprresurrect - saving..."); err != nil {
-		return err
-	}
-
 	clients, err := s.Clients()
 	if err != nil {
 		return err
