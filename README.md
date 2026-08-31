@@ -1,10 +1,12 @@
 # hyprresurrect
 
-hyprresurrect saves your currently open applications and restore them on reboot (or at any point)
+hyprresurrect saves your currently open applications in [hyprland](https://hypr.land/) and restores them on reboot (or at any point)
 
 ## Why?
 
-I started using hyprland. I wanted a way to restore my tiles and layout. I tried a few existing tools but wasn't happy, some would dump everything onto one workspace, or not care about multiple monitors, etc.
+I started using hyprland. I wanted a way to restore my tiles and layout. I tried a few existing tools but wasn't happy, some would dump everything onto one workspace, or not care about multiple monitors, etc. So the natural course of action was to build my own :)
+
+If you're reading this then this is still WIP! But mostly done. Just need the daemon, group support, and persisting tile size/layout
 
 ## Installation
 
@@ -33,7 +35,11 @@ hyprresurrect version           # prints the installed version
 
 ## Todo (Roughly in order)
 
+- [ ] **Integration testing hyprland via a nested session**
+
 - [ ] **Autosave daemon**
+
+- [ ] Auto restore on reboot
 
 - [ ] **Groups.** Grouped windows come back as separate tiles
 
