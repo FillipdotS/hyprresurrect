@@ -47,16 +47,6 @@ import (
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 )
 
-var (
-	// ErrProcessGone means the pid was not in procfs at all; the window closed
-	// between listing the clients and reading /proc.
-	ErrProcessGone = errors.New("process is gone")
-
-	// ErrNoCommand means the process exists but nothing replayable came out of
-	// it. The window is still worth saving, just without a command.
-	ErrNoCommand = errors.New("no launch command resolved")
-)
-
 type Resolver struct {
 	ProcRoot string
 }
@@ -96,7 +86,7 @@ func (r *Resolver) Command(c hypr.Client) ([]string, error) {
 	}
 
 	if isHelper(argv) {
-		return nil, fmt.Errorf("pid %d: still a browser helper: %w", pid, ErrNoCommand)
+		return nil, fmt.Errorf("pid %d: still a browser helper", pid)
 	}
 
 	return argv, nil
@@ -107,7 +97,7 @@ func (r *Resolver) cmdline(pid int) ([]string, error) {
 	b, err := os.ReadFile(r.procPath(pid, "cmdline"))
 
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("pid %d: %w", pid, ErrProcessGone)
+		return nil, fmt.Errorf("pid %d: process is gone", pid)
 	}
 	if err != nil {
 		return nil, err
@@ -122,7 +112,7 @@ func (r *Resolver) cmdline(pid int) ([]string, error) {
 		}
 	}
 	if len(argv) == 0 {
-		return nil, fmt.Errorf("pid %d: empty cmdline: %w", pid, ErrNoCommand)
+		return nil, fmt.Errorf("pid %d: empty cmdline", pid)
 	}
 
 	return argv, nil

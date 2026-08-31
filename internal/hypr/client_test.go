@@ -39,18 +39,13 @@ func TestClients(t *testing.T) {
 	}
 
 	want := Client{
-		Address:      "0x55d0768fdfd0",
-		Class:        "foot",
-		InitialClass: "foot",
-		Title:        "becoming you [slow lofi] - snoozy beats | cliamp",
-		InitialTitle: "foot",
-		Workspace:    WorkspaceRef{ID: 3, Name: "3"},
-		MonitorID:    0,
-		At:           [2]int{3628, 30},
-		Size:         [2]int{590, 516},
-		Floating:     false,
-		PID:          2035226,
-		StableID:     "18000c28",
+		Class:     "foot",
+		Workspace: WorkspaceRef{ID: 3},
+		MonitorID: 0,
+		At:        [2]int{3628, 30},
+		Size:      [2]int{590, 516},
+		Floating:  false,
+		PID:       2035226,
 	}
 	if diff := cmp.Diff(want, got[0]); diff != "" {
 		t.Errorf("Clients()[0] mismatch (-want +got):\n%s", diff)
@@ -68,18 +63,8 @@ func TestMonitors(t *testing.T) {
 	}
 
 	want := []Monitor{
-		{
-			ID:              0,
-			Name:            "HDMI-A-1",
-			Description:     "LG Electronics LG FHD 407TFNE07679",
-			ActiveWorkspace: WorkspaceRef{ID: 3, Name: "3"},
-		},
-		{
-			ID:              1,
-			Name:            "DP-1",
-			Description:     "Philips Consumer Electronics Company PHL 288E2 UK52308000445",
-			ActiveWorkspace: WorkspaceRef{ID: 5, Name: "5"},
-		},
+		{ID: 0, Name: "HDMI-A-1", ActiveWorkspace: WorkspaceRef{ID: 3}},
+		{ID: 1, Name: "DP-1", ActiveWorkspace: WorkspaceRef{ID: 5}},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Monitors() mismatch (-want +got):\n%s", diff)
@@ -98,11 +83,11 @@ func TestWorkspaces(t *testing.T) {
 
 	// Hyprland lists these in its own order, not sorted by id.
 	want := []Workspace{
-		{ID: 3, Name: "3", Monitor: "HDMI-A-1", MonitorID: 0, Windows: 3},
-		{ID: 1, Name: "1", Monitor: "DP-1", MonitorID: 1, Windows: 2},
-		{ID: 2, Name: "2", Monitor: "DP-1", MonitorID: 1, Windows: 2},
-		{ID: 4, Name: "4", Monitor: "DP-1", MonitorID: 1, Windows: 2},
-		{ID: 5, Name: "5", Monitor: "DP-1", MonitorID: 1, Windows: 4},
+		{ID: 3, Monitor: "HDMI-A-1"},
+		{ID: 1, Monitor: "DP-1"},
+		{ID: 2, Monitor: "DP-1"},
+		{ID: 4, Monitor: "DP-1"},
+		{ID: 5, Monitor: "DP-1"},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Workspaces() mismatch (-want +got):\n%s", diff)

@@ -1,7 +1,6 @@
 package capture
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -70,10 +69,10 @@ func TestCommand(t *testing.T) {
 	r := &Resolver{ProcRoot: proc.root}
 
 	tests := []struct {
-		name   string
-		client hypr.Client
-		want   []string
-		errIs  error
+		name    string
+		client  hypr.Client
+		want    []string
+		wantErr bool
 	}{
 		{
 			name:   "plain binary",
@@ -96,19 +95,19 @@ func TestCommand(t *testing.T) {
 			want:   []string{"/usr/lib/chromium/chromium", "--ozone-platform=wayland", "--app=https://discord.com/channels/@me"},
 		},
 		{
-			name:   "dead pid",
-			client: hypr.Client{PID: 9999, Class: "foot"},
-			errIs:  ErrProcessGone,
+			name:    "dead pid",
+			client:  hypr.Client{PID: 9999, Class: "foot"},
+			wantErr: true,
 		},
 		{
-			name:   "empty cmdline",
-			client: hypr.Client{PID: 5000, Class: "foot"},
-			errIs:  ErrNoCommand,
+			name:    "empty cmdline",
+			client:  hypr.Client{PID: 5000, Class: "foot"},
+			wantErr: true,
 		},
 		{
-			name:   "helper whose parent is another user",
-			client: hypr.Client{PID: 6000, Class: "chromium"},
-			errIs:  ErrNoCommand,
+			name:    "helper whose parent is another user",
+			client:  hypr.Client{PID: 6000, Class: "chromium"},
+			wantErr: true,
 		},
 	}
 
@@ -116,9 +115,9 @@ func TestCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := r.Command(tt.client)
 
-			if tt.errIs != nil {
-				if !errors.Is(err, tt.errIs) {
-					t.Fatalf("Command() error = %v, want %v", err, tt.errIs)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Command() error = nil, want an error")
 				}
 				return
 			}

@@ -4,7 +4,6 @@ package hypr
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -86,16 +85,4 @@ func (s *Socket) requestList[T any](request string) ([]T, error) {
 	}
 
 	return list, nil
-}
-
-func (s *Socket) Notify(message string) error {
-	response, err := s.request(fmt.Sprintf("/notify 2 10000 %s %s", "rgb(ff1ea3)", message))
-	if err != nil {
-		return err
-	}
-	if string(response) != "ok" {
-		return fmt.Errorf("notify rejected: %s", response)
-	}
-
-	return nil
 }
