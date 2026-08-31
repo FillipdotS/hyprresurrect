@@ -46,6 +46,13 @@ import (
 	"strings"
 )
 
+// Command returns the argv that would relaunch pid, read from the live procfs.
+// Restore uses it to tell two windows of one class apart: a live window is the
+// one a snapshot window describes if it would be captured the same way.
+func Command(pid int) ([]string, error) {
+	return command("/proc", pid)
+}
+
 // command returns the argv that would relaunch pid. It reads procfs, so it only
 // works while that process is alive: at restore time the saved pid means
 // nothing. procRoot is "/proc" outside of tests.
@@ -108,7 +115,38 @@ func cmdline(procRoot string, pid int) ([]string, error) {
 		return nil, fmt.Errorf("pid %d: empty cmdline", pid)
 	}
 
-	return argv, nil
+	return unmangle(procRoot, pid, argv), nil
+}
+
+// unmangle restores the argv of a process that overwrote its own argv area to
+// set its process title, which chromium and electron both do: the whole command
+// line comes back as one element instead of NUL separated arguments. Quoting
+// that as a single argument builds a filename that cannot exist, so the window
+// never comes back at all.
+//
+// /proc/<pid>/exe is the kernel's record of the binary and no process can
+// rewrite it, so it says exactly where the path ends rather than guessing at the
+// first space - which matters, because the path may contain one. Splitting the
+// arguments that follow is still a guess, but by then it is the only
+// information left.
+func unmangle(procRoot string, pid int, argv []string) []string {
+	if len(argv) != 1 {
+		return argv
+	}
+
+	// A deleted binary reads back as "<path> (deleted)", which fails the prefix
+	// check below and is left alone rather than mangled further.
+	exe, err := os.Readlink(procPath(procRoot, pid, "exe"))
+	if err != nil {
+		return argv
+	}
+
+	args, ok := strings.CutPrefix(argv[0], exe+" ")
+	if !ok {
+		return argv
+	}
+
+	return append([]string{exe}, strings.Fields(args)...)
 }
 
 // parentOf returns the parent pid, refusing to climb past init or out of the

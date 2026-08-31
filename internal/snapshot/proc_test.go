@@ -41,6 +41,16 @@ func (p *fakeProc) addProcess(t *testing.T, pid int, ppid, uid int, argv ...stri
 	p.write(t, filepath.Join(dir, "status"), status)
 }
 
+// setExe points /proc/<pid>/exe at target, as the kernel does. Unlike cmdline,
+// a process cannot rewrite it.
+func (p *fakeProc) setExe(t *testing.T, pid int, target string) {
+	t.Helper()
+
+	if err := os.Symlink(target, filepath.Join(p.root, strconv.Itoa(pid), "exe")); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+}
+
 func (p *fakeProc) write(t *testing.T, path, content string) {
 	t.Helper()
 
@@ -63,6 +73,24 @@ func TestCommand(t *testing.T) {
 	// app entirely, so resolution has to fail instead.
 	proc.addProcess(t, 6000, 6001, uid, "/usr/lib/chromium/chromium", "--type=gpu-process")
 	proc.addProcess(t, 6001, 1, 0, "/usr/lib/systemd/systemd", "--user")
+
+	// Electron overwrites its own argv area to set the process title, so the
+	// whole command line arrives as one element. Shape taken from a real
+	// discord capture.
+	const discord = "/home/u/.config/discord/app-1.0.155/Discord"
+	proc.addProcess(t, 7000, 1, uid, discord+" --url --")
+	proc.setExe(t, 7000, discord)
+
+	// A single argument that genuinely contains spaces must survive intact.
+	const spaced = "/home/u/My Apps/thing"
+	proc.addProcess(t, 7001, 1, uid, spaced)
+	proc.setExe(t, 7001, spaced)
+
+	// A mangled helper hides its --type= behind the same blob, so unmangling is
+	// also what lets the climb out of it work.
+	proc.addProcess(t, 7002, 7003, uid, "/usr/lib/electron/electron --type=renderer")
+	proc.setExe(t, 7002, "/usr/lib/electron/electron")
+	proc.addProcess(t, 7003, 1, uid, "/usr/lib/electron/electron", "--app=/opt/thing")
 
 	tests := []struct {
 		name    string
@@ -104,6 +132,21 @@ func TestCommand(t *testing.T) {
 			name:    "helper whose parent is another user",
 			pid:     6000,
 			wantErr: true,
+		},
+		{
+			name: "electron blob is split at the real binary",
+			pid:  7000,
+			want: []string{"/home/u/.config/discord/app-1.0.155/Discord", "--url", "--"},
+		},
+		{
+			name: "a genuine path with spaces is left whole",
+			pid:  7001,
+			want: []string{"/home/u/My Apps/thing"},
+		},
+		{
+			name: "mangled helper still climbs to its app",
+			pid:  7002,
+			want: []string{"/usr/lib/electron/electron", "--app=/opt/thing"},
 		},
 	}
 

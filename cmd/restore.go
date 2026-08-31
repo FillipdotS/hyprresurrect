@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 	"github.com/FillipdotS/hyprresurrect/internal/restore"
@@ -12,10 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	dryRun bool
-	settle time.Duration
-)
+var dryRun bool
 
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
@@ -27,7 +23,6 @@ var restoreCmd = &cobra.Command{
 
 func init() {
 	restoreCmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the hyprland commands instead of running them")
-	restoreCmd.Flags().DurationVar(&settle, "settle", 2*time.Second, "how long to let windows appear before fixing their placement")
 	rootCmd.AddCommand(restoreCmd)
 }
 
@@ -57,7 +52,6 @@ func runRestore() error {
 	)
 
 	runner := restore.Runner{
-		Settle: settle,
 		Out:    os.Stdout,
 		DryRun: dryRun,
 	}

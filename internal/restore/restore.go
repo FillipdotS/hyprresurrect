@@ -13,7 +13,6 @@ import (
 
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 	"github.com/FillipdotS/hyprresurrect/internal/snapshot"
-	"github.com/FillipdotS/hyprresurrect/internal/util"
 )
 
 // A Step is one Lua statement to send, with a label for --dry-run output and
@@ -31,23 +30,27 @@ type hyprland interface {
 // A Runner performs a restore: spawn every window, then move the ones the
 // spawn rules could not place.
 type Runner struct {
-	Hypr   hyprland // may be nil, i.e. dry run
-	Settle time.Duration
+	Hypr   hyprland  // may be nil, i.e. dry run
 	Out    io.Writer // progress; nil is silent
 	DryRun bool
+
+	timeout time.Duration
+	poll    time.Duration
+	command func(pid int) ([]string, error)
 }
 
-// Run restores snap. Spawning and reconciling are one operation, not two: the
-// rules attached to a spawn are best-effort, so a restore is only finished once
-// the windows that ignored them have been moved into place.
-//
-// A step that fails is reported and skipped rather than aborting: one window
-// that refuses to spawn must not cost the rest of the session.
+const (
+	defaultTimeout = 10 * time.Second
+	defaultPoll    = 250 * time.Millisecond
+)
+
+// Run restores given snapshot as best it can.
 func (r Runner) Run(snap snapshot.Snapshot) error {
 	// Value receiver: this only normalises our own copy.
 	if r.Out == nil {
 		r.Out = io.Discard
 	}
+	r.timeout = cmp.Or(r.timeout, defaultTimeout)
 
 	steps := Plan(snap)
 	if len(steps) == 0 {
@@ -56,10 +59,10 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 		return nil
 	}
 
-	err := r.apply(steps)
-
 	if r.DryRun {
-		_, _ = fmt.Fprintf(r.Out, "\n-- then wait %s and move any window that missed its workspace:\n", r.Settle)
+		err := r.apply(steps)
+
+		_, _ = fmt.Fprintf(r.Out, "\n-- then wait up to %s and move any window that missed its workspace:\n", r.timeout)
 		for _, t := range targets(snap) {
 			_, _ = fmt.Fprintf(r.Out, "   %s x%d -> workspace %d\n", t.class, t.count, t.workspace)
 		}
@@ -67,24 +70,99 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(r.Out, "\nwaiting %s for windows to appear\n", r.Settle)
-	if r.Settle > 0 {
-		time.Sleep(r.Settle)
+	before, err := r.Hypr.Clients()
+	if err != nil {
+		_, _ = fmt.Fprintf(r.Out, "warning: could not list windows before spawning: %v\n", err)
 	}
 
-	live, listErr := r.Hypr.Clients()
+	spawnErr := r.apply(steps)
+
+	live, listErr := r.settle(snap, before)
 	if listErr != nil {
-		return errors.Join(err, listErr)
+		return errors.Join(spawnErr, listErr)
 	}
 
-	moves := reconcile(live, snap)
+	moves := reconcile(r.resolve(live), snap)
 	if len(moves) == 0 {
 		_, _ = fmt.Fprintf(r.Out, "everything landed where it should\n")
 
-		return err
+		return spawnErr
 	}
 
-	return errors.Join(err, r.apply(moves))
+	return errors.Join(spawnErr, r.apply(moves))
+}
+
+// resolve tries to read back the command behind every live window
+func (r Runner) resolve(clients []hypr.Client) []liveWindow {
+	commandOf := r.command
+	if commandOf == nil {
+		commandOf = snapshot.Command
+	}
+
+	live := make([]liveWindow, len(clients))
+	for i, c := range clients {
+		live[i] = liveWindow{Client: c}
+
+		if argv, err := commandOf(c.PID); err == nil {
+			live[i].Command = argv
+		}
+	}
+
+	return live
+}
+
+// settle waits for the spawned windows to exist
+func (r Runner) settle(snap snapshot.Snapshot, existing []hypr.Client) ([]hypr.Client, error) {
+	_, _ = fmt.Fprintf(r.Out, "\nwaiting up to %s for windows to appear\n", r.timeout)
+
+	want := windowClasses(snap.Windows)
+	base := clientClasses(existing)
+	deadline := time.Now().Add(r.timeout)
+
+	for {
+		live, err := r.Hypr.Clients()
+		if err != nil {
+			return nil, err
+		}
+
+		if allAppeared(live, base, want) || !time.Now().Before(deadline) {
+			return live, nil
+		}
+
+		time.Sleep(cmp.Or(r.poll, defaultPoll))
+	}
+}
+
+// allAppeared reports whether every class has as many windows as the snapshot
+// expects, over and above the ones that were already open.
+func allAppeared(live []hypr.Client, existing, want map[string]int) bool {
+	have := clientClasses(live)
+
+	for class, n := range want {
+		if have[class]-existing[class] < n {
+			return false
+		}
+	}
+
+	return true
+}
+
+func clientClasses(clients []hypr.Client) map[string]int {
+	counts := make(map[string]int, len(clients))
+	for _, c := range clients {
+		counts[c.Class]++
+	}
+
+	return counts
+}
+
+func windowClasses(windows []snapshot.Window) map[string]int {
+	counts := make(map[string]int, len(windows))
+	for _, w := range windows {
+		counts[w.Class]++
+	}
+
+	return counts
 }
 
 func (r Runner) apply(steps []Step) error {
@@ -112,7 +190,7 @@ func (r Runner) apply(steps []Step) error {
 // time and the spawns are what create the workspaces, then one spawn per
 // window.
 func Plan(snap snapshot.Snapshot) []Step {
-	windows := restorable(snap)
+	windows := snap.Windows
 
 	steps := make([]Step, 0, len(windows))
 
@@ -132,14 +210,6 @@ func Plan(snap snapshot.Snapshot) []Step {
 	}
 
 	return steps
-}
-
-// restorable drops the windows whose command could not be read: there is
-// nothing to relaunch, and nothing to match a live window against either.
-func restorable(snap snapshot.Snapshot) []snapshot.Window {
-	return util.List[snapshot.Window](snap.Windows).Filter(func(w snapshot.Window) bool {
-		return len(w.Command) > 0
-	})
 }
 
 type binding struct {
