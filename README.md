@@ -15,3 +15,11 @@
       program, so the windows can come back as `nvim`, `btop` and friends rather
       than as bare shells. See
       [`internal/capture/resolver.go`](internal/capture/resolver.go).
+
+- [ ] **Named workspaces.** Only numeric workspace ids are captured.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+- [ ] **Fullscreen state.** Fullscreen windows come back windowed.

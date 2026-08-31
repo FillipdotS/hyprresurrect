@@ -1,0 +1,62 @@
+[
+    {
+        "id": 3,
+        "name": "3",
+        "monitor": "HDMI-A-1",
+        "monitorID": 0,
+        "windows": 3,
+        "hasfullscreen": false,
+        "lastwindow": "0x55d076c43360",
+        "lastwindowtitle": "foobar window title",
+        "ispersistent": false,
+        "tiledLayout": "dwindle"
+    },
+    {
+        "id": 1,
+        "name": "1",
+        "monitor": "DP-1",
+        "monitorID": 1,
+        "windows": 2,
+        "hasfullscreen": false,
+        "lastwindow": "0x55d075f03630",
+        "lastwindowtitle": "omarchy: ~",
+        "ispersistent": false,
+        "tiledLayout": "dwindle"
+    },
+    {
+        "id": 2,
+        "name": "2",
+        "monitor": "DP-1",
+        "monitorID": 1,
+        "windows": 2,
+        "hasfullscreen": false,
+        "lastwindow": "0x55d075bdc000",
+        "lastwindowtitle": "omarchy: ~",
+        "ispersistent": false,
+        "tiledLayout": "dwindle"
+    },
+    {
+        "id": 4,
+        "name": "4",
+        "monitor": "DP-1",
+        "monitorID": 1,
+        "windows": 2,
+        "hasfullscreen": false,
+        "lastwindow": "0x55d076bb80d0",
+        "lastwindowtitle": "Battle.net",
+        "ispersistent": false,
+        "tiledLayout": "dwindle"
+    },
+    {
+        "id": 5,
+        "name": "5",
+        "monitor": "DP-1",
+        "monitorID": 1,
+        "windows": 4,
+        "hasfullscreen": false,
+        "lastwindow": "0x55d076b03970",
+        "lastwindowtitle": "another window title",
+        "ispersistent": false,
+        "tiledLayout": "dwindle"
+    }
+]

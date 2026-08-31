@@ -1,0 +1,512 @@
+[
+    {
+        "address": "0x55d0768fdfd0",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            3628,
+            30
+        ],
+        "size": [
+            590,
+            516
+        ],
+        "workspace": {
+            "id": 3,
+            "name": "3"
+        },
+        "floating": false,
+        "monitor": 0,
+        "class": "foot",
+        "title": "becoming you [slow lofi] - snoozy beats | cliamp",
+        "initialClass": "foot",
+        "initialTitle": "foot",
+        "pid": 2035226,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [],
+        "tags": [
+            "default-opacity*",
+            "terminal*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 4,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "18000c28"
+    },
+    {
+        "address": "0x55d076c1a9c0",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            6,
+            30
+        ],
+        "size": [
+            1142,
+            1260
+        ],
+        "workspace": {
+            "id": 4,
+            "name": "4"
+        },
+        "floating": false,
+        "monitor": 1,
+        "class": "net.lutris.Lutris",
+        "title": "Lutris",
+        "initialClass": "net.lutris.Lutris",
+        "initialTitle": "Lutris",
+        "pid": 2655564,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [],
+        "tags": [
+            "default-opacity*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 10,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "18000f5b"
+    },
+    {
+        "address": "0x55d076bb80d0",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            1156,
+            30
+        ],
+        "size": [
+            1142,
+            1260
+        ],
+        "workspace": {
+            "id": 4,
+            "name": "4"
+        },
+        "floating": false,
+        "monitor": 1,
+        "class": "steam_app_default",
+        "title": "Battle.net",
+        "initialClass": "steam_app_default",
+        "initialTitle": "Battle.net",
+        "pid": 2755463,
+        "xwayland": true,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [],
+        "tags": [],
+        "swallowing": "0x0",
+        "focusHistoryID": 7,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "18001483"
+    },
+    {
+        "address": "0x55d0769f4740",
+        "mapped": true,
+        "hidden": false,
+        "visible": false,
+        "acceptsInput": false,
+        "at": [
+            6,
+            58
+        ],
+        "size": [
+            1142,
+            1232
+        ],
+        "workspace": {
+            "id": 2,
+            "name": "2"
+        },
+        "floating": false,
+        "monitor": 1,
+        "class": "Aseprite",
+        "title": "my_sprite.aseprite - Aseprite v1.3.18.2-dev",
+        "initialClass": "Aseprite",
+        "initialTitle": "Aseprite v1.3.18.2-dev",
+        "pid": 2768870,
+        "xwayland": true,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [
+            "0x55d076309910",
+            "0x55d0769f4740"
+        ],
+        "tags": [
+            "default-opacity*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 9,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "180014e7"
+    },
+    {
+        "address": "0x55d076309910",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            6,
+            58
+        ],
+        "size": [
+            1142,
+            1232
+        ],
+        "workspace": {
+            "id": 2,
+            "name": "2"
+        },
+        "floating": false,
+        "monitor": 1,
+        "class": "Godot",
+        "title": "level.tscn - Arise, My Ghouls! - Godot Engine",
+        "initialClass": "Godot",
+        "initialTitle": "Godot",
+        "pid": 2612611,
+        "xwayland": true,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [
+            "0x55d076309910",
+            "0x55d0769f4740"
+        ],
+        "tags": [
+            "default-opacity*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 8,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "18000f37"
+    },
+    {
+        "address": "0x55d075bdc000",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            1156,
+            30
+        ],
+        "size": [
+            1142,
+            1260
+        ],
+        "workspace": {
+            "id": 2,
+            "name": "2"
+        },
+        "floating": false,
+        "monitor": 1,
+        "class": "com.mitchellh.ghostty",
+        "title": "omarchy: ~",
+        "initialClass": "com.mitchellh.ghostty",
+        "initialTitle": "Ghostty",
+        "pid": 2895295,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [],
+        "tags": [
+            "default-opacity*",
+            "terminal*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 6,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "180015d5"
+    },
+    {
+        "address": "0x55d076d14370",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            3628,
+            554
+        ],
+        "size": [
+            590,
+            520
+        ],
+        "workspace": {
+            "id": 3,
+            "name": "3"
+        },
+        "floating": false,
+        "monitor": 0,
+        "class": "foot",
+        "title": "fdots@omarchy:~",
+        "initialClass": "foot",
+        "initialTitle": "foot",
+        "pid": 1542232,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [],
+        "tags": [
+            "default-opacity*",
+            "terminal*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 2,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "18000903"
+    },
+    {
+        "address": "0x55d0770dee50",
+        "mapped": true,
+        "hidden": false,
+        "visible": false,
+        "acceptsInput": false,
+        "at": [
+            2310,
+            58
+        ],
+        "size": [
+            1310,
+            1016
+        ],
+        "workspace": {
+            "id": 3,
+            "name": "3"
+        },
+        "floating": false,
+        "monitor": 0,
+        "class": "chrome-discord.com__channels_@me-Default",
+        "title": "(1) Discord",
+        "initialClass": "chrome-discord.com__channels_@me-Default",
+        "initialTitle": "discord.com_/channels/@me",
+        "pid": 2146689,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [
+            "0x55d076c43360",
+            "0x55d0770dee50"
+        ],
+        "tags": [
+            "default-opacity*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 5,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "18000d00"
+    },
+    {
+        "address": "0x55d0769171f0",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            6,
+            30
+        ],
+        "size": [
+            832,
+            1260
+        ],
+        "workspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "floating": false,
+        "monitor": 1,
+        "class": "firefox",
+        "title": "Bing — Mozilla Firefox",
+        "initialClass": "firefox",
+        "initialTitle": "Mozilla Firefox",
+        "pid": 201997,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [],
+        "tags": [
+            "firefox-based-browser*",
+            "pop"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 3,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "18000005"
+    },
+    {
+        "address": "0x55d076c43360",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            2310,
+            58
+        ],
+        "size": [
+            1310,
+            1016
+        ],
+        "workspace": {
+            "id": 3,
+            "name": "3"
+        },
+        "floating": false,
+        "monitor": 0,
+        "class": "firefox",
+        "title": "Google — Mozilla Firefox",
+        "initialClass": "firefox",
+        "initialTitle": "Mozilla Firefox",
+        "pid": 201997,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [
+            "0x55d076c43360",
+            "0x55d0770dee50"
+        ],
+        "tags": [
+            "firefox-based-browser*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 1,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "180000de"
+    },
+    {
+        "address": "0x55d0770263d0",
+        "mapped": true,
+        "hidden": false,
+        "visible": true,
+        "acceptsInput": true,
+        "at": [
+            846,
+            30
+        ],
+        "size": [
+            1452,
+            1260
+        ],
+        "workspace": {
+            "id": 1,
+            "name": "1"
+        },
+        "floating": false,
+        "monitor": 1,
+        "class": "com.mitchellh.ghostty",
+        "title": "omarchy: ~",
+        "initialClass": "com.mitchellh.ghostty",
+        "initialTitle": "Ghostty",
+        "pid": 2895295,
+        "xwayland": false,
+        "pinned": false,
+        "pinFullscreened": false,
+        "fullscreen": 0,
+        "fullscreenClient": 0,
+        "fullscreenHandler": "default",
+        "allowedOverFullscreen": true,
+        "grouped": [],
+        "tags": [
+            "default-opacity*",
+            "terminal*"
+        ],
+        "swallowing": "0x0",
+        "focusHistoryID": 0,
+        "inhibitingIdle": false,
+        "xdgTag": "",
+        "xdgDescription": "",
+        "contentType": "none",
+        "tearingHint": false,
+        "stableId": "180015f2"
+    }
+]
