@@ -23,13 +23,14 @@ func luaString(s string) string {
 			b.WriteString(`\n`)
 		case '\r':
 			b.WriteString(`\r`)
-		case 0:
-			b.WriteString(`\0`)
 		default:
 			// Escaping by byte keeps multi-byte UTF-8 intact: every
 			// continuation byte is >= 0x80 and passes through untouched.
+			//
+			// Always three digits: lua reads \ddd greedily, so a shorter escape
+			// followed by a digit is read as one larger character instead.
 			if c < 0x20 || c == 0x7f {
-				fmt.Fprintf(&b, `\%d`, c)
+				fmt.Fprintf(&b, `\%03d`, c)
 				continue
 			}
 			b.WriteByte(c)
