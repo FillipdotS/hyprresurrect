@@ -72,3 +72,70 @@ func TestMonitors(t *testing.T) {
 
 	checkRequests(t, fake, "[j]/monitors")
 }
+
+func TestEval(t *testing.T) {
+	fake := newFakeHypr(t, map[string]string{"/eval return 1+1": "ok"})
+
+	if err := New(fake.SockPath).Eval("return 1+1"); err != nil {
+		t.Fatalf("Eval() error = %v", err)
+	}
+
+	checkRequests(t, fake, "/eval return 1+1")
+}
+
+func TestDispatch(t *testing.T) {
+	const expr = `hl.dsp.focus({window="address:0x1"})`
+
+	fake := newFakeHypr(t, map[string]string{"/dispatch " + expr: "ok"})
+
+	if err := New(fake.SockPath).Dispatch(expr); err != nil {
+		t.Fatalf("Dispatch() error = %v", err)
+	}
+
+	checkRequests(t, fake, "/dispatch "+expr)
+}
+
+// Replies verified against hyprland 0.56.2.
+func TestRequestErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		reply   string
+		wantErr bool
+	}{
+		{
+			name:  "ok",
+			reply: "ok",
+		},
+		{
+			name:    "unknown request",
+			reply:   "unknown request",
+			wantErr: true,
+		},
+		{
+			name:    "lua syntax error",
+			reply:   `error: [string "this is not lua"]:1: syntax error near 'is'`,
+			wantErr: true,
+		},
+		{
+			// The statement ran but did nothing, which is a failed restore.
+			name:    "warning is a failure",
+			reply:   "warning: =[C]:-1: hl.focus: window not found",
+			wantErr: true,
+		},
+		{
+			name:  "only the prefix counts",
+			reply: "ok: no error here",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := newFakeHypr(t, map[string]string{"/eval x": tt.reply})
+
+			err := New(fake.SockPath).Eval("x")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Eval() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

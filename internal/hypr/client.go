@@ -2,17 +2,22 @@
 package hypr
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Socket struct {
 	addr *net.UnixAddr
 }
+
+var replyErrorPrefixes = []string{"unknown request", "error:", "warning:"}
 
 // New returns a Socket that talks to the hyprland socket at sockPath.
 func New(sockPath string) *Socket {
@@ -54,11 +59,21 @@ func (s *Socket) request(request string) ([]byte, error) {
 		return nil, err
 	}
 
-	if string(responseBytes) == "unknown request" {
-		return nil, errors.New("unknown request")
+	if err := replyError(responseBytes); err != nil {
+		return nil, err
 	}
 
 	return responseBytes, nil
+}
+
+func replyError(reply []byte) error {
+	for _, prefix := range replyErrorPrefixes {
+		if bytes.HasPrefix(reply, []byte(prefix)) {
+			return fmt.Errorf("hyprland: %s", strings.TrimSpace(string(reply)))
+		}
+	}
+
+	return nil
 }
 
 func (s *Socket) Clients() ([]Client, error) {
@@ -81,4 +96,19 @@ func (s *Socket) requestList[T any](request string) ([]T, error) {
 	}
 
 	return list, nil
+}
+
+// Eval runs arbitrary Lua against hyprland's `hl` API.
+func (s *Socket) Eval(lua string) error {
+	_, err := s.request("/eval " + lua)
+
+	return err
+}
+
+// Dispatch evaluates a Lua expression that must produce an HL.Dispatcher, such
+// as `hl.dsp.focus({window="address:0x1"})`.
+func (s *Socket) Dispatch(expr string) error {
+	_, err := s.request("/dispatch " + expr)
+
+	return err
 }
