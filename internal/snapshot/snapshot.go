@@ -41,6 +41,10 @@ type source interface {
 
 // Capture reads the current session and turns it into a Snapshot.
 func Capture(src source) (Snapshot, error) {
+	return capture(src, "/proc")
+}
+
+func capture(src source, procRoot string) (Snapshot, error) {
 	monitors, err := src.Monitors()
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("monitors: %w", err)
@@ -50,8 +54,6 @@ func Capture(src source) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("clients: %w", err)
 	}
-
-	fmt.Printf("%#v\n", clients[0])
 
 	snap := Snapshot{
 		Version:    Version,
@@ -71,7 +73,7 @@ func Capture(src source) (Snapshot, error) {
 	}
 
 	for _, c := range clients {
-		cmd, err := command("/proc", c.PID)
+		cmd, err := command(procRoot, c.PID)
 		if err != nil {
 			// TOOD: Log somewhere what we failed to capture
 			continue
