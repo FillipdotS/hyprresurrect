@@ -1,6 +1,7 @@
 package hypr
 
 type Client struct {
+	Address   string       `json:"address"`
 	Class     string       `json:"class"`
 	Workspace WorkspaceRef `json:"workspace"`
 	MonitorID int          `json:"monitor"`

@@ -3,13 +3,19 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
+	"time"
 
+	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 	"github.com/FillipdotS/hyprresurrect/internal/restore"
 	"github.com/FillipdotS/hyprresurrect/internal/snapshot"
 	"github.com/spf13/cobra"
 )
 
-var dryRun bool
+var (
+	dryRun bool
+	settle time.Duration
+)
 
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
@@ -21,6 +27,7 @@ var restoreCmd = &cobra.Command{
 
 func init() {
 	restoreCmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the hyprland commands instead of running them")
+	restoreCmd.Flags().DurationVar(&settle, "settle", 2*time.Second, "how long to let windows appear before fixing their placement")
 	rootCmd.AddCommand(restoreCmd)
 }
 
@@ -45,25 +52,23 @@ func runRestore() error {
 		return err
 	}
 
-	steps := restore.Plan(snap)
-
-	if !dryRun {
-		// TODO
-		return errors.New("restore is not implemented yet; re-run with --dry-run")
-	}
-
 	fmt.Printf("%s: %d window(s) captured %s\n",
 		newest.Path, newest.Windows, newest.CapturedAt.Format("2006-01-02 15:04:05"),
 	)
 
-	if len(steps) == 0 {
-		fmt.Println("nothing to restore")
-		return nil
+	runner := restore.Runner{
+		Settle: settle,
+		Out:    os.Stdout,
+		DryRun: dryRun,
 	}
 
-	for _, step := range steps {
-		fmt.Printf("\n-- %s\n%s\n", step.What, step.Lua)
+	// A dry run never talks to hyprland, so it works outside a session too.
+	if !dryRun {
+		runner.Hypr, err = hypr.NewFromEnv()
+		if err != nil {
+			return err
+		}
 	}
 
-	return nil
+	return runner.Run(snap)
 }

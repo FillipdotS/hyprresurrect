@@ -7,9 +7,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// Plan is still a stub, so everything below fails. The cases are the
-// specification: they say what the emitted Lua has to look like.
-
 func TestPlanBindsWorkspacesBeforeSpawning(t *testing.T) {
 	snap := snapshot.Snapshot{
 		Monitors: []snapshot.Monitor{
@@ -48,14 +45,14 @@ func TestPlanBindsWorkspacesBeforeSpawning(t *testing.T) {
 		},
 		{
 			What: "spawn foot",
-			Lua: `hl.exec_cmd("foot -e cliamp", {workspace = "3", ` +
-				`monitor = "HDMI-A-1", no_initial_focus = true})`,
+			Lua: `hl.exec_cmd("foot -e cliamp", ` +
+				`{workspace = "3 silent", no_initial_focus = true})`,
 		},
 		{
 			What: "spawn com.mitchellh.ghostty",
-			Lua: `hl.exec_cmd("/usr/bin/ghostty", {workspace = "5", ` +
-				`monitor = "DP-1", float = true, size = "713 629", ` +
-				`move = "4 28", no_initial_focus = true})`,
+			Lua: `hl.exec_cmd("/usr/bin/ghostty", {workspace = "5 silent", ` +
+				`float = true, size = "713 629", move = "4 28", ` +
+				`no_initial_focus = true})`,
 		},
 	}
 
@@ -107,8 +104,8 @@ func TestPlanOmitsGeometryWhenTiled(t *testing.T) {
 		},
 		{
 			What: "spawn Aseprite",
-			Lua: `hl.exec_cmd("aseprite", {workspace = "2", ` +
-				`monitor = "DP-1", no_initial_focus = true})`,
+			Lua: `hl.exec_cmd("aseprite", ` +
+				`{workspace = "2 silent", no_initial_focus = true})`,
 		},
 	}
 

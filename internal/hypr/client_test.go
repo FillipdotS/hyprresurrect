@@ -39,6 +39,7 @@ func TestClients(t *testing.T) {
 	}
 
 	want := Client{
+		Address:   "0x55d0768fdfd0",
 		Class:     "foot",
 		Workspace: WorkspaceRef{ID: 3},
 		MonitorID: 0,
