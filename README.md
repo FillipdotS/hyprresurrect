@@ -28,6 +28,7 @@ go install github.com/FillipdotS/hyprresurrect@latest
 hyprresurrect save              # snapshot the current windows/layout
 hyprresurrect restore           # restore the most recent snapshot
 hyprresurrect restore --dry-run # prints the restore plan without actually executing it 
+hyprresurrect version           # prints the installed version
 ```
 
 ## Todo (Roughly in order)
