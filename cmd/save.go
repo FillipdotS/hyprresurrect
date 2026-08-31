@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
+	"github.com/FillipdotS/hyprresurrect/internal/snapshot"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +26,12 @@ func save() error {
 		return err
 	}
 
-	clients, err := s.Clients()
+	snap, err := snapshot.Capture(s)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(clients)
+	fmt.Println(snap.Monitors[0])
 
 	return nil
 }

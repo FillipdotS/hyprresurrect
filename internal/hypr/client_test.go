@@ -72,26 +72,3 @@ func TestMonitors(t *testing.T) {
 
 	checkRequests(t, fake, "[j]/monitors")
 }
-
-func TestWorkspaces(t *testing.T) {
-	fake := serveFixture(t, "[j]/workspaces", "workspaces.json")
-
-	got, err := New(fake.SockPath).Workspaces()
-	if err != nil {
-		t.Fatalf("Workspaces() error = %v", err)
-	}
-
-	// Hyprland lists these in its own order, not sorted by id.
-	want := []Workspace{
-		{ID: 3, Monitor: "HDMI-A-1"},
-		{ID: 1, Monitor: "DP-1"},
-		{ID: 2, Monitor: "DP-1"},
-		{ID: 4, Monitor: "DP-1"},
-		{ID: 5, Monitor: "DP-1"},
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("Workspaces() mismatch (-want +got):\n%s", diff)
-	}
-
-	checkRequests(t, fake, "[j]/workspaces")
-}

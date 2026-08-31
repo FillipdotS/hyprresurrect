@@ -14,11 +14,6 @@ type WorkspaceRef struct {
 	ID int `json:"id"`
 }
 
-type Workspace struct {
-	ID      int    `json:"id"`
-	Monitor string `json:"monitor"`
-}
-
 type Monitor struct {
 	ID              int          `json:"id"`
 	Name            string       `json:"name"`

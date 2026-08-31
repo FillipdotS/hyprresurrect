@@ -69,10 +69,6 @@ func (s *Socket) Monitors() ([]Monitor, error) {
 	return s.requestList[Monitor]("[j]/monitors")
 }
 
-func (s *Socket) Workspaces() ([]Workspace, error) {
-	return s.requestList[Workspace]("[j]/workspaces")
-}
-
 func (s *Socket) requestList[T any](request string) ([]T, error) {
 	response, err := s.request(request)
 	if err != nil {

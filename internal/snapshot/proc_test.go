@@ -1,14 +1,12 @@
-package capture
+package snapshot
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/FillipdotS/hyprresurrect/internal/hypr"
-	"github.com/google/go-cmp/cmp"
 )
 
 // fakeProc builds a procfs-shaped tree under a temp dir. Real cmdline files are
@@ -66,67 +64,65 @@ func TestCommand(t *testing.T) {
 	proc.addProcess(t, 6000, 6001, uid, "/usr/lib/chromium/chromium", "--type=gpu-process")
 	proc.addProcess(t, 6001, 1, 0, "/usr/lib/systemd/systemd", "--user")
 
-	r := &Resolver{ProcRoot: proc.root}
-
 	tests := []struct {
 		name    string
-		client  hypr.Client
+		pid     int
 		want    []string
 		wantErr bool
 	}{
 		{
-			name:   "plain binary",
-			client: hypr.Client{PID: 1000, Class: "foot"},
-			want:   []string{"foot"},
+			name: "plain binary",
+			pid:  1000,
+			want: []string{"foot"},
 		},
 		{
-			name:   "interpreter keeps both args",
-			client: hypr.Client{PID: 2000, Class: "net.lutris.Lutris"},
-			want:   []string{"/bin/python3", "/usr/bin/lutris"},
+			name: "interpreter keeps both args",
+			pid:  2000,
+			want: []string{"/bin/python3", "/usr/bin/lutris"},
 		},
 		{
-			name:   "browser process used as is",
-			client: hypr.Client{PID: 3000, Class: "chromium"},
-			want:   []string{"/usr/lib/chromium/chromium", "--ozone-platform=wayland", "--app=https://discord.com/channels/@me"},
+			name: "browser process used as is",
+			pid:  3000,
+			want: []string{"/usr/lib/chromium/chromium", "--ozone-platform=wayland", "--app=https://discord.com/channels/@me"},
 		},
 		{
-			name:   "renderer climbs to its browser",
-			client: hypr.Client{PID: 3001, Class: "chromium"},
-			want:   []string{"/usr/lib/chromium/chromium", "--ozone-platform=wayland", "--app=https://discord.com/channels/@me"},
+			name: "renderer climbs to its browser",
+			pid:  3001,
+			want: []string{"/usr/lib/chromium/chromium", "--ozone-platform=wayland", "--app=https://discord.com/channels/@me"},
 		},
 		{
 			name:    "dead pid",
-			client:  hypr.Client{PID: 9999, Class: "foot"},
+			pid:     9999,
 			wantErr: true,
 		},
 		{
 			name:    "empty cmdline",
-			client:  hypr.Client{PID: 5000, Class: "foot"},
+			pid:     5000,
 			wantErr: true,
 		},
 		{
 			name:    "helper whose parent is another user",
-			client:  hypr.Client{PID: 6000, Class: "chromium"},
+			pid:     6000,
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := r.Command(tt.client)
+			got, err := command(proc.root, tt.pid)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("Command() error = nil, want an error")
+					t.Fatalf("command() error = nil, want an error")
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("Command() error = %v", err)
+				t.Fatalf("command() error = %v", err)
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("Command() mismatch (-want +got):\n%s", diff)
+				t.Errorf("command() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

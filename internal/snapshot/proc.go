@@ -1,4 +1,4 @@
-// Package capture deals with capturing the specific process launched
+// Some AI TODOs about how to better capture flatpak and other stuff
 //
 // TODO: flatpak apps report in-sandbox argv (/app/bin/foo) that won't launch
 // from the host; detect via /proc/<pid>/root/.flatpak-info and use `flatpak run <id>`.
@@ -32,7 +32,8 @@
 // cwd alone - an unattended restore must not start a package manager. Store the
 // cwd and the enriched command separately from the raw argv in the snapshot, so
 // a bad guess stays debuggable.
-package capture
+
+package snapshot
 
 import (
 	"bufio"
@@ -43,21 +44,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 )
 
-type Resolver struct {
-	ProcRoot string
-}
-
-// Command returns the argv that would relaunch the process behind c. It reads
-// procfs, so it only works while that process is alive: at restore time the
-// saved pid means nothing.
-func (r *Resolver) Command(c hypr.Client) ([]string, error) {
-	pid := c.PID
-
-	argv, err := r.cmdline(pid)
+// command returns the argv that would relaunch pid. It reads procfs, so it only
+// works while that process is alive: at restore time the saved pid means
+// nothing. procRoot is "/proc" outside of tests.
+func command(procRoot string, pid int) ([]string, error) {
+	argv, err := cmdline(procRoot, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -72,12 +65,12 @@ func (r *Resolver) Command(c hypr.Client) ([]string, error) {
 	// top-level process, but an XWayland window sets its own pid, so climb until
 	// we reach a process that isn't a helper.
 	for hops := 0; isHelper(argv) && hops < maxParentHops; hops++ {
-		parent, ok := r.parentOf(pid)
+		parent, ok := parentOf(procRoot, pid)
 		if !ok {
 			break
 		}
 
-		parentArgv, err := r.cmdline(parent)
+		parentArgv, err := cmdline(procRoot, parent)
 		if err != nil {
 			break
 		}
@@ -93,8 +86,8 @@ func (r *Resolver) Command(c hypr.Client) ([]string, error) {
 }
 
 // cmdline reads /proc/<pid>/cmdline, whose args are NUL separated.
-func (r *Resolver) cmdline(pid int) ([]string, error) {
-	b, err := os.ReadFile(r.procPath(pid, "cmdline"))
+func cmdline(procRoot string, pid int) ([]string, error) {
+	b, err := os.ReadFile(procPath(procRoot, pid, "cmdline"))
 
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("pid %d: process is gone", pid)
@@ -121,13 +114,13 @@ func (r *Resolver) cmdline(pid int) ([]string, error) {
 // parentOf returns the parent pid, refusing to climb past init or out of the
 // uid we started in: a uid change means we've left the app for something like a
 // session manager, whose argv would be nonsense to replay.
-func (r *Resolver) parentOf(pid int) (int, bool) {
-	parent, uid, ok := r.statusOf(pid)
+func parentOf(procRoot string, pid int) (int, bool) {
+	parent, uid, ok := statusOf(procRoot, pid)
 	if !ok || parent <= 1 {
 		return 0, false
 	}
 
-	_, parentUID, ok := r.statusOf(parent)
+	_, parentUID, ok := statusOf(procRoot, parent)
 	if !ok || parentUID != uid {
 		return 0, false
 	}
@@ -136,8 +129,8 @@ func (r *Resolver) parentOf(pid int) (int, bool) {
 }
 
 // statusOf returns the parent pid and real uid from /proc/<pid>/status.
-func (r *Resolver) statusOf(pid int) (parent, uid int, ok bool) {
-	f, err := os.Open(r.procPath(pid, "status"))
+func statusOf(procRoot string, pid int) (parent, uid int, ok bool) {
+	f, err := os.Open(procPath(procRoot, pid, "status"))
 	if err != nil {
 		return 0, 0, false
 	}
@@ -171,13 +164,8 @@ func (r *Resolver) statusOf(pid int) (parent, uid int, ok bool) {
 	return parent, uid, haveParent && haveUID
 }
 
-func (r *Resolver) procPath(pid int, parts ...string) string {
-	root := r.ProcRoot
-	if root == "" {
-		root = "/proc"
-	}
-
-	return filepath.Join(append([]string{root, strconv.Itoa(pid)}, parts...)...)
+func procPath(procRoot string, pid int, parts ...string) string {
+	return filepath.Join(append([]string{procRoot, strconv.Itoa(pid)}, parts...)...)
 }
 
 // Reports whether argv belongs to a chromium/electron child process
