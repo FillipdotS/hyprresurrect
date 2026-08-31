@@ -37,8 +37,6 @@ type source interface {
 	Monitors() ([]hypr.Monitor, error)
 }
 
-// TODO: Now save to file for restoring
-
 // Capture reads the current session and turns it into a Snapshot.
 func Capture(src source) (Snapshot, error) {
 	return capture(src, "/proc")

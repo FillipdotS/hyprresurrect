@@ -24,6 +24,8 @@ const (
 	filePerm = 0o600
 )
 
+const DefaultKeep = 5
+
 type Store struct {
 	dir string
 }
