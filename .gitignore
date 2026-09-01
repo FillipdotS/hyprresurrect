@@ -12,6 +12,7 @@
 
 !*.go
 !**/testdata/*.json
+!**/e2e/*.lua
 !go.sum
 !go.mod
 

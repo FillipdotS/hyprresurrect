@@ -33,9 +33,25 @@ hyprresurrect restore --dry-run # prints the restore plan without actually execu
 hyprresurrect version           # prints the installed version
 ```
 
+## Contributing
+
+Feel free to contribute anything and everything! Just make sure it's tested and makes sense for this tool. Preferably make an issue beforehand so there's alignment.
+
+### Testing
+
+Regular unit tests can be run via `go test`
+
+#### E2E Tests
+
+These require you to be running hyprland. They spawn a nested hyprland session that uses the real `go build` binary to run commands and checks via `hyprctl clients -j` if we got the intended results
+
+```sh
+HR_E2E=1 go test ./internal/e2e/
+```
+
 ## Todo (Roughly in order)
 
-- [ ] **Integration testing hyprland via a nested session**
+- [ ] **E2E testing hyprland via a nested session**
 
 - [ ] **Autosave daemon**
 
