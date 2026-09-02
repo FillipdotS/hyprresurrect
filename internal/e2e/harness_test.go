@@ -21,7 +21,17 @@ import (
 const (
 	startTimeout = 10 * time.Second
 	waitTimeout  = 5 * time.Second
+
+	// announceFor just has to outlast the suite: each test replaces the banner.
+	announceFor = 30 * time.Minute
 )
+
+// slow lingers after each step so a run can be watched: HR_E2E_SLOW=500ms.
+var slow, _ = time.ParseDuration(os.Getenv("HR_E2E_SLOW"))
+
+func pause() {
+	time.Sleep(slow)
+}
 
 // nested is the compositor under test, ready by the time any test runs.
 var nested *compositor
@@ -98,6 +108,16 @@ func run(m *testing.M) int {
 	nested = c
 
 	return m.Run()
+}
+
+// setup names the test in the nested session and takes its windows down again.
+func setup(t *testing.T) cli {
+	t.Helper()
+
+	nested.Announce(t)
+	t.Cleanup(func() { nested.CloseAllWindows(t) })
+
+	return nested.CLI(t)
 }
 
 func baseEnv(runtimeDir string, extra ...string) []string {
@@ -336,6 +356,12 @@ func (c *compositor) Socket() *hypr.Socket {
 func (c *compositor) Spawn(t *testing.T, class string, args ...string) hypr.Client {
 	t.Helper()
 
+	return c.SpawnTitled(t, class, "", args...)
+}
+
+func (c *compositor) SpawnTitled(t *testing.T, class, title string, args ...string) hypr.Client {
+	t.Helper()
+
 	existing := make(map[string]bool)
 	for _, client := range c.clients(t) {
 		existing[client.Address] = true
@@ -345,12 +371,13 @@ func (c *compositor) Spawn(t *testing.T, class string, args ...string) hypr.Clie
 		args = []string{"sleep", "infinity"}
 	}
 
-	cmd := exec.Command("foot", append([]string{"--app-id=" + class, "-e"}, args...)...)
-	cmd.Env = baseEnv(c.dir,
-		"WAYLAND_DISPLAY="+c.display,
-		"XDG_CONFIG_HOME="+c.config,
-		"XDG_CONFIG_DIRS="+c.config,
-	)
+	flags := []string{"--app-id=" + class}
+	if title != "" {
+		flags = append(flags, "--title="+title)
+	}
+
+	cmd := exec.Command("foot", append(append(flags, "-e"), args...)...)
+	cmd.Env = c.clientEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
@@ -379,6 +406,8 @@ func (c *compositor) Spawn(t *testing.T, class string, args ...string) hypr.Clie
 
 		return false
 	})
+
+	pause()
 
 	return spawned
 }
@@ -431,6 +460,8 @@ func (c *compositor) FocusWorkspace(t *testing.T, workspace int) {
 	if err := c.Socket().Eval(lua); err != nil {
 		t.Fatalf("focus workspace %d: %v", workspace, err)
 	}
+
+	pause()
 }
 
 // Hyprctl runs the real hyprctl against the nested instance
@@ -461,4 +492,90 @@ func (c *compositor) CloseAllWindows(t *testing.T) {
 	}
 
 	c.WaitFor(t, func(clients []hypr.Client) bool { return len(clients) == 0 })
+
+	pause()
+}
+
+// Announce names the running test across the top of the nested session.
+func (c *compositor) Announce(t *testing.T) {
+	t.Helper()
+
+	c.Eval(t, fmt.Sprintf(
+		`if hrbanner then hrbanner:dismiss() end `+
+			`hrbanner = hl.notification.create({text = %q, timeout = %d, font_size = 26})`,
+		t.Name(), announceFor.Milliseconds()))
+
+	pause()
+}
+
+func (c *compositor) clientEnv() []string {
+	return baseEnv(c.dir,
+		"WAYLAND_DISPLAY="+c.display,
+		"XDG_CONFIG_HOME="+c.config,
+		"XDG_CONFIG_DIRS="+c.config,
+	)
+}
+
+func (c *compositor) Eval(t *testing.T, lua string) {
+	t.Helper()
+
+	if err := c.Socket().Eval(lua); err != nil {
+		t.Fatalf("eval %s: %v", lua, err)
+	}
+}
+
+func (c *compositor) FocusMonitor(t *testing.T, monitor string) {
+	t.Helper()
+
+	c.Eval(t, fmt.Sprintf(`hl.dispatch(hl.dsp.focus({monitor = %q}))`, monitor))
+
+	pause()
+}
+
+func (c *compositor) Monitor(t *testing.T, id int) monitor {
+	t.Helper()
+
+	for _, m := range hyprctlMonitors(t) {
+		if m.ID == id {
+			return m
+		}
+	}
+
+	t.Fatalf("no monitor %d; have %v", id, hyprctlMonitors(t))
+
+	return monitor{}
+}
+
+func (c *compositor) AddHeadlessMonitor(t *testing.T) monitor {
+	t.Helper()
+
+	existing := make(map[int]bool)
+	for _, m := range hyprctlMonitors(t) {
+		existing[m.ID] = true
+	}
+
+	c.Hyprctl(t, "output", "create", "headless")
+
+	var added monitor
+
+	deadline := time.Now().Add(startTimeout)
+	for time.Now().Before(deadline) && added.Name == "" {
+		for _, m := range hyprctlMonitors(t) {
+			if !existing[m.ID] {
+				added = m
+
+				break
+			}
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if added.Name == "" {
+		t.Fatalf("no new monitor after %v; have %v", startTimeout, hyprctlMonitors(t))
+	}
+
+	t.Cleanup(func() { c.Hyprctl(t, "output", "remove", added.Name) })
+
+	return added
 }

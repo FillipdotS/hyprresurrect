@@ -59,6 +59,8 @@ func (h cli) Run(args ...string) string {
 		h.t.Fatalf("hyprresurrect %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
 
+	pause()
+
 	return string(out)
 }
 

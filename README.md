@@ -49,6 +49,13 @@ These require you to be running hyprland. They spawn a nested hyprland session t
 HR_E2E=1 go test ./internal/e2e/
 ```
 
+The nested session shows the name of the running test. To actually watch one go
+by, slow every step down:
+
+```sh
+HR_E2E=1 HR_E2E_SLOW=500ms go test ./internal/e2e/ -run TestRoundTrip
+```
+
 ## Todo (Roughly in order)
 
 - [ ] **E2E testing hyprland via a nested session**

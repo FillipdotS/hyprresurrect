@@ -8,9 +8,7 @@ import (
 )
 
 func TestSaveCapturesWindow(t *testing.T) {
-	t.Cleanup(func() { nested.CloseAllWindows(t) })
-
-	hr := nested.CLI(t)
+	hr := setup(t)
 
 	nested.Spawn(t, "hrtest-a")
 	hr.Run("save")
