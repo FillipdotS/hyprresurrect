@@ -58,7 +58,7 @@ HR_E2E=1 HR_E2E_SLOW=500ms go test ./internal/e2e/ -run TestRoundTrip
 
 ## Todo (Roughly in order)
 
-- [ ] **E2E testing hyprland via a nested session**
+- [x] **E2E testing hyprland via a nested session**
 
 - [ ] **Autosave daemon**
 
