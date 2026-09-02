@@ -67,6 +67,14 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 			_, _ = fmt.Fprintf(r.Out, "   %s x%d -> workspace %d\n", t.class, t.count, t.workspace)
 		}
 
+		if tabs := groupTargets(snap); len(tabs) > 0 {
+			_, _ = fmt.Fprintf(r.Out, "\n-- and rebuild the groups:\n")
+
+			for _, t := range tabs {
+				_, _ = fmt.Fprintf(r.Out, "   %s on workspace %d\n", strings.Join(t.classes, " + "), t.workspace)
+			}
+		}
+
 		return err
 	}
 
@@ -82,14 +90,18 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 		return errors.Join(spawnErr, listErr)
 	}
 
-	moves := reconcile(r.resolve(live), snap)
-	if len(moves) == 0 {
+	resolved := r.resolve(live)
+	claimed := claim(resolved, snap)
+
+	// Groups only after the moves: members have to share a workspace first.
+	steps = append(moves(resolved, snap, claimed), regroup(resolved, snap, claimed)...)
+	if len(steps) == 0 {
 		_, _ = fmt.Fprintf(r.Out, "everything landed where it should\n")
 
 		return spawnErr
 	}
 
-	return errors.Join(spawnErr, r.apply(moves))
+	return errors.Join(spawnErr, r.apply(steps))
 }
 
 // resolve tries to read back the command behind every live window

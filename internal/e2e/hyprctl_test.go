@@ -8,12 +8,15 @@ import (
 )
 
 type client struct {
-	Class     string `json:"class"`
-	Title     string `json:"title"`
-	Monitor   int    `json:"monitor"`
-	Floating  bool   `json:"floating"`
-	At        [2]int `json:"at"`
-	Size      [2]int `json:"size"`
+	Address   string   `json:"address"`
+	Grouped   []string `json:"grouped"`
+	Class     string   `json:"class"`
+	Title     string   `json:"title"`
+	Monitor   int      `json:"monitor"`
+	Floating  bool     `json:"floating"`
+	Visible   bool     `json:"visible"`
+	At        [2]int   `json:"at"`
+	Size      [2]int   `json:"size"`
 	Workspace struct {
 		ID int `json:"id"`
 	} `json:"workspace"`

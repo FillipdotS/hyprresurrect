@@ -17,8 +17,10 @@ type liveWindow struct {
 	Command []string
 }
 
-// reconcile returns the moves needed for windows the spawn rules could not
-// place. An app with a single-instance mode (ghostty --gtk-single-instance, a
+// claim decides which live window each snapshot window describes, as the index
+// of that live window, or -1 for a snapshot window nothing came back for.
+//
+// An app with a single-instance mode (ghostty --gtk-single-instance, a
 // second firefox) creates its window from a process that was already running,
 // so exec_cmd's rules never attach to it and it lands on the active workspace.
 //
@@ -33,7 +35,7 @@ type liveWindow struct {
 //
 // Whatever is left unclaimed - the terminal the restore was started from,
 // anything opened since - is left alone.
-func reconcile(live []liveWindow, snap snapshot.Snapshot) []Step {
+func claim(live []liveWindow, snap snapshot.Snapshot) []int {
 	windows := snap.Windows
 
 	claimed := make([]int, len(windows))
@@ -71,8 +73,16 @@ func reconcile(live []liveWindow, snap snapshot.Snapshot) []Step {
 		}
 	}
 
+	return claimed
+}
+
+// moves returns the steps for the windows the spawn rules could not place: the
+// single-instance apps that ignored them, and anything that landed on the
+// active workspace instead of its own.
+func moves(live []liveWindow, snap snapshot.Snapshot, claimed []int) []Step {
 	var steps []Step
-	for wi, w := range windows {
+
+	for wi, w := range snap.Windows {
 		li := claimed[wi]
 		if li < 0 || live[li].Workspace.ID == w.Workspace {
 			continue
@@ -86,6 +96,91 @@ func reconcile(live []liveWindow, snap snapshot.Snapshot) []Step {
 	}
 
 	return steps
+}
+
+// regroup returns the steps that rebuild the groups the snapshot recorded. The
+// group spawn rule is no use here: a restore spawns with no_initial_focus onto
+// a silent workspace, and with nothing focused there "group set" gives every
+// window its own group of one. So groups are built afterwards, by address, off
+// the HL.Group object - no direction, no focus, no geometry. See plan.md.
+//
+// Members are added in snapshot order, which is tab order, and the raised tab
+// comes last because adding a member raises it.
+func regroup(live []liveWindow, snap snapshot.Snapshot, claimed []int) []Step {
+	var steps []Step
+
+	for _, g := range groups(snap, claimed) {
+		head := live[claimed[g.members[0]]]
+		headSelector := luaString("address:" + head.Address)
+
+		steps = append(steps, Step{
+			What: "group " + head.Class,
+			Lua:  fmt.Sprintf("hl.dispatch(hl.dsp.group.toggle({window = %s}))", headSelector),
+		})
+
+		for _, wi := range g.members[1:] {
+			member := live[claimed[wi]]
+
+			steps = append(steps, Step{
+				What: fmt.Sprintf("tab %s into the %s group", member.Class, head.Class),
+				Lua: fmt.Sprintf("hl.get_window(%s).group:add(hl.get_window(%s))",
+					headSelector, luaString("address:"+member.Address)),
+			})
+		}
+
+		if g.active > 0 {
+			steps = append(steps, Step{
+				What: fmt.Sprintf("raise tab %d of the %s group", g.active, head.Class),
+				Lua: fmt.Sprintf("hl.dispatch(hl.dsp.group.active({window = %s, index = %d}))",
+					headSelector, g.active),
+			})
+		}
+	}
+
+	return steps
+}
+
+type group struct {
+	members []int
+	active  int
+}
+
+// groups gathers the snapshot's groups in tab order. A nil claimed counts every
+// window, which is what --dry-run wants before anything has been spawned.
+func groups(snap snapshot.Snapshot, claimed []int) []group {
+	var (
+		out  []group
+		byID = make(map[int]int) // snapshot group id -> index into out
+	)
+
+	for wi, w := range snap.Windows {
+		if w.Group == 0 || (claimed != nil && claimed[wi] < 0) {
+			continue
+		}
+
+		i, seen := byID[w.Group]
+		if !seen {
+			i = len(out)
+			byID[w.Group] = i
+
+			out = append(out, group{})
+		}
+
+		out[i].members = append(out[i].members, wi)
+
+		if w.GroupActive {
+			out[i].active = len(out[i].members)
+		}
+	}
+
+	// Adding the last member already raises it; only say so when it isn't.
+	for i := range out {
+		if out[i].active == len(out[i].members) {
+			out[i].active = 0
+		}
+	}
+
+	return out
 }
 
 type target struct {
@@ -115,4 +210,27 @@ func targets(snap snapshot.Snapshot) []target {
 	})
 
 	return out
+}
+
+// groupTargets describes the groups a restore would rebuild, for --dry-run.
+// Unlike regroup it works off the snapshot alone, before anything is spawned.
+func groupTargets(snap snapshot.Snapshot) []groupTarget {
+	var out []groupTarget
+
+	for _, g := range groups(snap, nil) {
+		t := groupTarget{workspace: snap.Windows[g.members[0]].Workspace}
+
+		for _, wi := range g.members {
+			t.classes = append(t.classes, snap.Windows[wi].Class)
+		}
+
+		out = append(out, t)
+	}
+
+	return out
+}
+
+type groupTarget struct {
+	workspace int
+	classes   []string
 }

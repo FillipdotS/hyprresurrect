@@ -9,6 +9,8 @@ type Client struct {
 	Size      [2]int       `json:"size"`
 	Floating  bool         `json:"floating"`
 	PID       int          `json:"pid"`
+	Grouped   []string     `json:"grouped"` // group members in tab order, self included
+	Visible   bool         `json:"visible"` // the raised tab; true when ungrouped
 }
 
 type WorkspaceRef struct {

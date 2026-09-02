@@ -8,6 +8,16 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// movesFor is moves over a fresh claim, the pair as Run uses them.
+func movesFor(windows []liveWindow, snap snapshot.Snapshot) []Step {
+	return moves(windows, snap, claim(windows, snap))
+}
+
+// regroupFor is regroup over a fresh claim, the pair as Run uses them.
+func regroupFor(windows []liveWindow, snap snapshot.Snapshot) []Step {
+	return regroup(windows, snap, claim(windows, snap))
+}
+
 func live(address, class string, workspace int, command ...string) liveWindow {
 	return liveWindow{
 		Client: hypr.Client{
@@ -46,8 +56,8 @@ func TestReconcileKeepsEachCommandOnItsOwnWorkspace(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(want, reconcile(windows, snap)); diff != "" {
-		t.Errorf("reconcile() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, movesFor(windows, snap)); diff != "" {
+		t.Errorf("moves() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -65,8 +75,8 @@ func TestReconcileFallsBackToClassWithoutACommand(t *testing.T) {
 		Lua:  `hl.dispatch(hl.dsp.window.move({window = "address:0x1", workspace = 3}))`,
 	}}
 
-	if diff := cmp.Diff(want, reconcile([]liveWindow{live("0x1", "foot", 9)}, snap)); diff != "" {
-		t.Errorf("reconcile() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, movesFor([]liveWindow{live("0x1", "foot", 9)}, snap)); diff != "" {
+		t.Errorf("moves() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -88,8 +98,8 @@ func TestReconcilePairsInterchangeableWindows(t *testing.T) {
 		Lua:  `hl.dispatch(hl.dsp.window.move({window = "address:0x2", workspace = 2}))`,
 	}}
 
-	if diff := cmp.Diff(want, reconcile(windows, snap)); diff != "" {
-		t.Errorf("reconcile() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, movesFor(windows, snap)); diff != "" {
+		t.Errorf("moves() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -109,8 +119,8 @@ func TestReconcileLeavesCorrectlyPlacedWindowsAlone(t *testing.T) {
 		live("0x2", "foot", 3, "foot"),
 	}
 
-	if got := reconcile(windows, snap); len(got) != 0 {
-		t.Errorf("reconcile() = %v, want no moves: 0x2 is already on workspace 3", got)
+	if got := movesFor(windows, snap); len(got) != 0 {
+		t.Errorf("moves() = %v, want no moves: 0x2 is already on workspace 3", got)
 	}
 }
 
@@ -134,8 +144,8 @@ func TestReconcileMovesOnlyTheMisplacedWindow(t *testing.T) {
 		Lua:  `hl.dispatch(hl.dsp.window.move({window = "address:0x2", workspace = 1}))`,
 	}}
 
-	if diff := cmp.Diff(want, reconcile(windows, snap)); diff != "" {
-		t.Errorf("reconcile() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, movesFor(windows, snap)); diff != "" {
+		t.Errorf("moves() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -153,8 +163,8 @@ func TestReconcileLeavesUnknownWindowsAlone(t *testing.T) {
 		live("0x2", "com.mitchellh.ghostty", 9, "ghostty"),
 	}
 
-	if got := reconcile(windows, snap); len(got) != 0 {
-		t.Errorf("reconcile() = %v, want no moves", got)
+	if got := movesFor(windows, snap); len(got) != 0 {
+		t.Errorf("moves() = %v, want no moves", got)
 	}
 }
 
@@ -163,8 +173,8 @@ func TestReconcileNothingLive(t *testing.T) {
 		Windows: []snapshot.Window{{Class: "foot", Workspace: 1, Command: []string{"foot"}}},
 	}
 
-	if got := reconcile(nil, snap); len(got) != 0 {
-		t.Errorf("reconcile() = %v, want no moves", got)
+	if got := movesFor(nil, snap); len(got) != 0 {
+		t.Errorf("moves() = %v, want no moves", got)
 	}
 }
 
@@ -186,5 +196,148 @@ func TestTargetsCountsWindowsPerClassAndWorkspace(t *testing.T) {
 
 	if diff := cmp.Diff(want, targets(snap), cmp.AllowUnexported(target{})); diff != "" {
 		t.Errorf("targets() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// groupedWindow is a snapshot window that came back as part of a group.
+func groupedWindow(class string, workspace, group int, active bool) snapshot.Window {
+	return snapshot.Window{
+		Class:       class,
+		Workspace:   workspace,
+		Group:       group,
+		GroupActive: active,
+		Command:     []string{class},
+	}
+}
+
+// Two groups on one workspace: the members of each have to find their own head,
+// and the tabs have to go on in the order they were saved.
+func TestRegroupBuildsEachGroupFromItsOwnHead(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			groupedWindow("alpha", 1, 1, false),
+			groupedWindow("beta", 1, 1, false),
+			groupedWindow("gamma", 1, 2, false),
+			{Class: "loner", Workspace: 1, Command: []string{"loner"}},
+			groupedWindow("delta", 1, 2, false),
+		},
+	}
+
+	windows := []liveWindow{
+		live("0xALPHA", "alpha", 1, "alpha"),
+		live("0xBETA", "beta", 1, "beta"),
+		live("0xGAMMA", "gamma", 1, "gamma"),
+		live("0xLONER", "loner", 1, "loner"),
+		live("0xDELTA", "delta", 1, "delta"),
+	}
+
+	want := []Step{
+		{
+			What: "group alpha",
+			Lua:  `hl.dispatch(hl.dsp.group.toggle({window = "address:0xALPHA"}))`,
+		},
+		{
+			What: "tab beta into the alpha group",
+			Lua:  `hl.get_window("address:0xALPHA").group:add(hl.get_window("address:0xBETA"))`,
+		},
+		{
+			What: "group gamma",
+			Lua:  `hl.dispatch(hl.dsp.group.toggle({window = "address:0xGAMMA"}))`,
+		},
+		{
+			What: "tab delta into the gamma group",
+			Lua:  `hl.get_window("address:0xGAMMA").group:add(hl.get_window("address:0xDELTA"))`,
+		},
+	}
+
+	if diff := cmp.Diff(want, regroupFor(windows, snap)); diff != "" {
+		t.Errorf("regroup() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// Adding a member raises it, so the tab that was up only needs saying when it
+// isn't the one added last.
+func TestRegroupRaisesTheTabThatWasUp(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			groupedWindow("alpha", 2, 1, true),
+			groupedWindow("beta", 2, 1, false),
+		},
+	}
+
+	windows := []liveWindow{
+		live("0xALPHA", "alpha", 2, "alpha"),
+		live("0xBETA", "beta", 2, "beta"),
+	}
+
+	want := Step{
+		What: "raise tab 1 of the alpha group",
+		Lua:  `hl.dispatch(hl.dsp.group.active({window = "address:0xALPHA", index = 1}))`,
+	}
+
+	got := regroupFor(windows, snap)
+	if len(got) == 0 || got[len(got)-1] != want {
+		t.Errorf("regroup() = %v, want it to end with %v", got, want)
+	}
+}
+
+func TestRegroupSkipsTheRaiseWhenTheLastTabWasUp(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			groupedWindow("alpha", 2, 1, false),
+			groupedWindow("beta", 2, 1, true),
+		},
+	}
+
+	windows := []liveWindow{
+		live("0xALPHA", "alpha", 2, "alpha"),
+		live("0xBETA", "beta", 2, "beta"),
+	}
+
+	if got := regroupFor(windows, snap); len(got) != 2 {
+		t.Errorf("regroup() = %v, want just the toggle and the one add", got)
+	}
+}
+
+// A member that never came back - its app failed to launch - shortens the group
+// rather than sinking it.
+func TestRegroupBuildsWhatCameBack(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			groupedWindow("alpha", 1, 1, false),
+			groupedWindow("beta", 1, 1, false),
+			groupedWindow("gamma", 1, 1, false),
+		},
+	}
+
+	windows := []liveWindow{
+		live("0xALPHA", "alpha", 1, "alpha"),
+		live("0xGAMMA", "gamma", 1, "gamma"),
+	}
+
+	want := []Step{
+		{
+			What: "group alpha",
+			Lua:  `hl.dispatch(hl.dsp.group.toggle({window = "address:0xALPHA"}))`,
+		},
+		{
+			What: "tab gamma into the alpha group",
+			Lua:  `hl.get_window("address:0xALPHA").group:add(hl.get_window("address:0xGAMMA"))`,
+		},
+	}
+
+	if diff := cmp.Diff(want, regroupFor(windows, snap)); diff != "" {
+		t.Errorf("regroup() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// A window nothing came back for leaves nothing to group.
+func TestRegroupIgnoresAGroupThatIsAllMissing(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{groupedWindow("alpha", 1, 1, true)},
+	}
+
+	if got := regroupFor(nil, snap); len(got) != 0 {
+		t.Errorf("regroup() = %v, want nothing", got)
 	}
 }

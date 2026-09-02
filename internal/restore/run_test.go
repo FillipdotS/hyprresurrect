@@ -256,3 +256,59 @@ func TestRunMovesEachCommandToItsOwnWorkspace(t *testing.T) {
 		}
 	}
 }
+
+// The order matters: a group can only be built once its members are on the same
+// workspace, so the moves have to have gone out first.
+func TestRunGroupsAfterMoving(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			{Class: "alpha", Workspace: 3, Command: []string{"alpha"}, Group: 1},
+			{Class: "beta", Workspace: 3, Command: []string{"beta"}, Group: 1, GroupActive: true},
+			{Class: "gamma", Workspace: 3, Command: []string{"gamma"}, Group: 1},
+		},
+	}
+
+	// beta ignored its spawn rule and landed on the active workspace.
+	h := &fakeHypr{clients: []hypr.Client{
+		{Address: "0xA", Class: "alpha", Workspace: hypr.WorkspaceRef{ID: 3}},
+		{Address: "0xB", Class: "beta", Workspace: hypr.WorkspaceRef{ID: 1}},
+		{Address: "0xG", Class: "gamma", Workspace: hypr.WorkspaceRef{ID: 3}},
+	}}
+
+	if err := testRunner(h).Run(snap); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	want := []string{
+		`hl.dispatch(hl.dsp.window.move({window = "address:0xB", workspace = 3}))`,
+		`hl.dispatch(hl.dsp.group.toggle({window = "address:0xA"}))`,
+		`hl.get_window("address:0xA").group:add(hl.get_window("address:0xB"))`,
+		`hl.get_window("address:0xA").group:add(hl.get_window("address:0xG"))`,
+		`hl.dispatch(hl.dsp.group.active({window = "address:0xA", index = 2}))`,
+	}
+
+	if diff := cmp.Diff(want, h.evaled[len(h.evaled)-len(want):]); diff != "" {
+		t.Errorf("evaluated Lua mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRunDryRunAnnouncesTheGroups(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			{Class: "alpha", Workspace: 3, Command: []string{"alpha"}, Group: 1},
+			{Class: "beta", Workspace: 3, Command: []string{"beta"}, Group: 1},
+			{Class: "loner", Workspace: 3, Command: []string{"loner"}},
+		},
+	}
+
+	var out strings.Builder
+
+	r := Runner{timeout: 5 * time.Second, Out: &out, DryRun: true}
+	if err := r.Run(snap); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if want := "alpha + beta on workspace 3"; !strings.Contains(out.String(), want) {
+		t.Errorf("--dry-run output missing %q:\n%s", want, out.String())
+	}
+}

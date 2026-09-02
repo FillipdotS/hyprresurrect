@@ -6,7 +6,7 @@ hyprresurrect saves your currently open applications in [hyprland](https://hypr.
 
 I started using hyprland. I wanted a way to restore my tiles and layout. I tried a few existing tools but wasn't happy, some would dump everything onto one workspace, or not care about multiple monitors, etc. So the natural course of action was to build my own :)
 
-If you're reading this then this is still WIP! But mostly done. Just need the daemon, group support, and persisting tile size/layout
+If you're reading this then this is still WIP! But mostly done. Just need the daemon, ✅~~group support~~, and persisting tile size/layout
 
 ## Installation
 
@@ -64,7 +64,7 @@ HR_E2E=1 HR_E2E_SLOW=500ms go test ./internal/e2e/ -run TestRoundTrip
 
 - [ ] Auto restore on reboot
 
-- [ ] **Groups.** Grouped windows come back as separate tiles
+- [x] **Groups.** Membership, tab order and the raised tab all round trip
 
 - [ ] **Terminal contents.** i.e. "btop" or "herdr"
 

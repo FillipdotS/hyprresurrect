@@ -47,9 +47,26 @@ func TestClients(t *testing.T) {
 		Size:      [2]int{590, 516},
 		Floating:  false,
 		PID:       2035226,
+		Grouped:   []string{},
+		Visible:   true,
 	}
 	if diff := cmp.Diff(want, got[0]); diff != "" {
 		t.Errorf("Clients()[0] mismatch (-want +got):\n%s", diff)
+	}
+
+	// A tab of a group, and not the raised one.
+	grouped := got[3]
+	if grouped.Class != "Aseprite" {
+		t.Fatalf("Clients()[3] is %s, want the Aseprite tab", grouped.Class)
+	}
+
+	wantGrouped := []string{"0x55d076309910", "0x55d0769f4740"}
+	if diff := cmp.Diff(wantGrouped, grouped.Grouped); diff != "" {
+		t.Errorf("Clients()[3].Grouped mismatch (-want +got):\n%s", diff)
+	}
+
+	if grouped.Visible {
+		t.Error("Clients()[3].Visible = true, want false for a tab behind another")
 	}
 
 	checkRequests(t, fake, "[j]/clients")
