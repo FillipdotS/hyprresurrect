@@ -1,6 +1,6 @@
 # hyprresurrect
 
-hyprresurrect saves your currently open applications in [hyprland](https://hypr.land/) and restores them on reboot (or at any point)
+hyprresurrect saves your currently open applications in [Hyprland](https://hypr.land/) and restores them on reboot (or at any point). Workspaces, groups, tile sizes, layout are all preserved.
 
 ## Why?
 
