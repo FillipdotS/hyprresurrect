@@ -17,7 +17,7 @@ import (
 const (
 	appDir = "hyprresurrect"
 
-	fileTimeLayout = "2006-01-02T15-04-05Z"
+	fileTimeLayout = "2006-01-02T15-04-05.000Z"
 	fileExt        = ".json"
 
 	dirPerm  = 0o700

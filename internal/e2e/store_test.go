@@ -3,14 +3,9 @@ package e2e
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
-
-// Snapshot files are named to the second, so two saves inside one share a path
-// and the later replaces the earlier.
-const betweenSaves = 1100 * time.Millisecond
 
 func TestRestoreUsesTheNewestSnapshot(t *testing.T) {
 	hr := setup(t)
@@ -22,8 +17,6 @@ func TestRestoreUsesTheNewestSnapshot(t *testing.T) {
 	nested.Spawn(t, "hrtest-old")
 	hr.Run("save")
 	nested.CloseAllWindows(t)
-
-	time.Sleep(betweenSaves)
 
 	nested.Spawn(t, "hrtest-new")
 	hr.Run("save")
@@ -41,11 +34,7 @@ func TestSaveKeepsOnlyTheNewestSnapshots(t *testing.T) {
 
 	nested.Spawn(t, "hrtest-prune")
 
-	for i := range 7 {
-		if i > 0 {
-			time.Sleep(betweenSaves)
-		}
-
+	for range 7 {
 		hr.Run("save")
 	}
 
