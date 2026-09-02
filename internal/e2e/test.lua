@@ -7,6 +7,14 @@ hl.config({
         enabled = false,
     },
 
+    -- Deterministic tiling for the layout tests: new windows always open to
+    -- the right of or below the focused one, and a split keeps its direction
+    -- when the windows around it are resized.
+    dwindle = {
+        force_split = 2,
+        preserve_split = true,
+    },
+
     general = {
         layout = "dwindle",
         gaps_in = 0,

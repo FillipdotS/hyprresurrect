@@ -15,6 +15,7 @@ type Snapshot struct {
 	CapturedAt time.Time `json:"capturedAt"`
 	Monitors   []Monitor `json:"monitors"`
 	Windows    []Window  `json:"windows"`
+	Layouts    []Layout  `json:"layouts,omitzero"`
 }
 
 type Monitor struct {
@@ -99,6 +100,8 @@ func capture(src source, procRoot string) (Snapshot, error) {
 
 		snap.Windows = append(snap.Windows, w)
 	}
+
+	snap.Layouts = layouts(snap.Windows)
 
 	return snap, nil
 }

@@ -255,9 +255,11 @@ func TestRegroupBuildsEachGroupFromItsOwnHead(t *testing.T) {
 	}
 }
 
-// Adding a member raises it, so the tab that was up only needs saying when it
-// isn't the one added last.
-func TestRegroupRaisesTheTabThatWasUp(t *testing.T) {
+func raiseTabsFor(windows []liveWindow, snap snapshot.Snapshot) []Step {
+	return raiseTabs(windows, snap, claim(windows, snap))
+}
+
+func TestRaiseTabsPutsTheSavedTabBackUp(t *testing.T) {
 	snap := snapshot.Snapshot{
 		Windows: []snapshot.Window{
 			groupedWindow("alpha", 2, 1, true),
@@ -270,18 +272,17 @@ func TestRegroupRaisesTheTabThatWasUp(t *testing.T) {
 		live("0xBETA", "beta", 2, "beta"),
 	}
 
-	want := Step{
+	want := []Step{{
 		What: "raise tab 1 of the alpha group",
 		Lua:  `hl.dispatch(hl.dsp.group.active({window = "address:0xALPHA", index = 1}))`,
-	}
+	}}
 
-	got := regroupFor(windows, snap)
-	if len(got) == 0 || got[len(got)-1] != want {
-		t.Errorf("regroup() = %v, want it to end with %v", got, want)
+	if diff := cmp.Diff(want, raiseTabsFor(windows, snap)); diff != "" {
+		t.Errorf("raiseTabs() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestRegroupSkipsTheRaiseWhenTheLastTabWasUp(t *testing.T) {
+func TestRaiseTabsNamesTheLastTabToo(t *testing.T) {
 	snap := snapshot.Snapshot{
 		Windows: []snapshot.Window{
 			groupedWindow("alpha", 2, 1, false),
@@ -294,50 +295,30 @@ func TestRegroupSkipsTheRaiseWhenTheLastTabWasUp(t *testing.T) {
 		live("0xBETA", "beta", 2, "beta"),
 	}
 
-	if got := regroupFor(windows, snap); len(got) != 2 {
-		t.Errorf("regroup() = %v, want just the toggle and the one add", got)
+	want := []Step{{
+		What: "raise tab 2 of the alpha group",
+		Lua:  `hl.dispatch(hl.dsp.group.active({window = "address:0xALPHA", index = 2}))`,
+	}}
+
+	if diff := cmp.Diff(want, raiseTabsFor(windows, snap)); diff != "" {
+		t.Errorf("raiseTabs() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-// A member that never came back - its app failed to launch - shortens the group
-// rather than sinking it.
-func TestRegroupBuildsWhatCameBack(t *testing.T) {
+func TestRaiseTabsSaysNothingWhenNoTabWasRecorded(t *testing.T) {
 	snap := snapshot.Snapshot{
 		Windows: []snapshot.Window{
-			groupedWindow("alpha", 1, 1, false),
-			groupedWindow("beta", 1, 1, false),
-			groupedWindow("gamma", 1, 1, false),
+			groupedWindow("alpha", 2, 1, false),
+			groupedWindow("beta", 2, 1, false),
 		},
 	}
 
 	windows := []liveWindow{
-		live("0xALPHA", "alpha", 1, "alpha"),
-		live("0xGAMMA", "gamma", 1, "gamma"),
+		live("0xALPHA", "alpha", 2, "alpha"),
+		live("0xBETA", "beta", 2, "beta"),
 	}
 
-	want := []Step{
-		{
-			What: "group alpha",
-			Lua:  `hl.dispatch(hl.dsp.group.toggle({window = "address:0xALPHA"}))`,
-		},
-		{
-			What: "tab gamma into the alpha group",
-			Lua:  `hl.get_window("address:0xALPHA").group:add(hl.get_window("address:0xGAMMA"))`,
-		},
-	}
-
-	if diff := cmp.Diff(want, regroupFor(windows, snap)); diff != "" {
-		t.Errorf("regroup() mismatch (-want +got):\n%s", diff)
-	}
-}
-
-// A window nothing came back for leaves nothing to group.
-func TestRegroupIgnoresAGroupThatIsAllMissing(t *testing.T) {
-	snap := snapshot.Snapshot{
-		Windows: []snapshot.Window{groupedWindow("alpha", 1, 1, true)},
-	}
-
-	if got := regroupFor(nil, snap); len(got) != 0 {
-		t.Errorf("regroup() = %v, want nothing", got)
+	if got := raiseTabsFor(windows, snap); len(got) != 0 {
+		t.Errorf("raiseTabs() = %v, want none", got)
 	}
 }

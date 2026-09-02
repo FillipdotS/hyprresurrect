@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -75,6 +74,14 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 			}
 		}
 
+		if tiles := layoutTargets(snap); len(tiles) > 0 {
+			_, _ = fmt.Fprintf(r.Out, "\n-- and rebuild the tile layout:\n")
+
+			for _, t := range tiles {
+				_, _ = fmt.Fprintf(r.Out, "   workspace %d: %s\n", t.workspace, t.tree)
+			}
+		}
+
 		return err
 	}
 
@@ -94,14 +101,39 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 	claimed := claim(resolved, snap)
 
 	// Groups only after the moves: members have to share a workspace first.
-	steps = append(moves(resolved, snap, claimed), regroup(resolved, snap, claimed)...)
-	if len(steps) == 0 {
+	placement := append(moves(resolved, snap, claimed), regroup(resolved, snap, claimed)...)
+	if len(placement) == 0 {
 		_, _ = fmt.Fprintf(r.Out, "everything landed where it should\n")
-
-		return spawnErr
 	}
 
-	return errors.Join(spawnErr, r.apply(steps))
+	placeErr := r.apply(placement)
+
+	settled, listErr := r.Hypr.Clients()
+	if listErr != nil {
+		return errors.Join(spawnErr, placeErr, listErr)
+	}
+
+	tiled := refresh(resolved, settled)
+
+	steps = append(relayout(tiled, snap, claimed), raiseTabs(tiled, snap, claimed)...)
+
+	return errors.Join(spawnErr, placeErr, r.apply(steps))
+}
+
+func refresh(windows []liveWindow, clients []hypr.Client) []liveWindow {
+	byAddress := make(map[string]hypr.Client, len(clients))
+	for _, c := range clients {
+		byAddress[c.Address] = c
+	}
+
+	updated := slices.Clone(windows)
+	for i, w := range updated {
+		if c, ok := byAddress[w.Address]; ok {
+			updated[i].Client = c
+		}
+	}
+
+	return updated
 }
 
 // resolve tries to read back the command behind every live window
@@ -210,7 +242,7 @@ func Plan(snap snapshot.Snapshot) []Step {
 		steps = append(steps, Step{
 			What: fmt.Sprintf("bind workspace %d to %s", b.workspace, b.monitor),
 			Lua: fmt.Sprintf("hl.workspace_rule({workspace = %s, monitor = %s})",
-				luaString(strconv.Itoa(b.workspace)), luaString(b.monitor)),
+				luaString(fmt.Sprintf("%d", b.workspace)), luaString(b.monitor)),
 		})
 	}
 
@@ -262,7 +294,7 @@ func bindings(windows []snapshot.Window) []binding {
 
 func spawn(w snapshot.Window) string {
 	// "silent" puts the window on the workspace without making that workspace visible
-	rules := []string{"workspace = " + luaString(strconv.Itoa(w.Workspace)+" silent")}
+	rules := []string{"workspace = " + luaString(fmt.Sprintf("%d silent", w.Workspace))}
 
 	if w.Floating {
 		rules = append(rules,

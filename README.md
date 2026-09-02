@@ -6,7 +6,7 @@ hyprresurrect saves your currently open applications in [hyprland](https://hypr.
 
 I started using hyprland. I wanted a way to restore my tiles and layout. I tried a few existing tools but wasn't happy, some would dump everything onto one workspace, or not care about multiple monitors, etc. So the natural course of action was to build my own :)
 
-If you're reading this then this is still WIP! But mostly done. Just need the daemon, ✅~~group support~~, and persisting tile size/layout
+If you're reading this then this is still WIP! But mostly done. Just need the daemon, ✅~~group support~~, ✅~~persisting tile size/layout~~
 
 ## Installation
 
@@ -58,18 +58,18 @@ HR_E2E=1 HR_E2E_SLOW=500ms go test ./internal/e2e/ -run TestRoundTrip
 
 ## Todo (Roughly in order)
 
-- [x] **E2E testing hyprland via a nested session**
+- ✅ **E2E testing hyprland via a nested session**
 
-- [ ] **Autosave daemon**
+- ⬜ **Autosave daemon**
 
-- [ ] Auto restore on reboot
+- ⬜ Auto restore on reboot
 
-- [x] **Groups.** Membership, tab order and the raised tab all round trip
+- ✅ **Groups.** Membership, tab order and the raised tab all round trip
 
-- [ ] **Terminal contents.** i.e. "btop" or "herdr"
+- ⬜ **Terminal contents.** i.e. "btop" or "herdr"
 
-- [ ] **Remember tile sizes and layout.**
+- ✅ **Remember tile sizes and layout.**
 
-- [ ] **Named workspaces.** Only numeric workspace ids are captured. Not sure this is needed
+- ⬜ **Named workspaces.** Only numeric workspace ids are captured. Not sure this is needed
 
-- [ ] **Flatpak support.**
+- ⬜ **Flatpak support.**

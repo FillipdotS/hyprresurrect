@@ -104,8 +104,8 @@ func moves(live []liveWindow, snap snapshot.Snapshot, claimed []int) []Step {
 // window its own group of one. So groups are built afterwards, by address, off
 // the HL.Group object - no direction, no focus, no geometry. See plan.md.
 //
-// Members are added in snapshot order, which is tab order, and the raised tab
-// comes last because adding a member raises it.
+// Members are added in snapshot order, which is tab order; raiseTabs puts the
+// recorded tab back up once everything else has settled.
 func regroup(live []liveWindow, snap snapshot.Snapshot, claimed []int) []Step {
 	var steps []Step
 
@@ -127,14 +127,26 @@ func regroup(live []liveWindow, snap snapshot.Snapshot, claimed []int) []Step {
 					headSelector, luaString("address:"+member.Address)),
 			})
 		}
+	}
 
-		if g.active > 0 {
-			steps = append(steps, Step{
-				What: fmt.Sprintf("raise tab %d of the %s group", g.active, head.Class),
-				Lua: fmt.Sprintf("hl.dispatch(hl.dsp.group.active({window = %s, index = %d}))",
-					headSelector, g.active),
-			})
+	return steps
+}
+
+func raiseTabs(live []liveWindow, snap snapshot.Snapshot, claimed []int) []Step {
+	var steps []Step
+
+	for _, g := range groups(snap, claimed) {
+		if g.active == 0 {
+			continue
 		}
+
+		head := live[claimed[g.members[0]]]
+
+		steps = append(steps, Step{
+			What: fmt.Sprintf("raise tab %d of the %s group", g.active, head.Class),
+			Lua: fmt.Sprintf("hl.dispatch(hl.dsp.group.active({window = %s, index = %d}))",
+				luaString("address:"+head.Address), g.active),
+		})
 	}
 
 	return steps
@@ -170,13 +182,6 @@ func groups(snap snapshot.Snapshot, claimed []int) []group {
 
 		if w.GroupActive {
 			out[i].active = len(out[i].members)
-		}
-	}
-
-	// Adding the last member already raises it; only say so when it isn't.
-	for i := range out {
-		if out[i].active == len(out[i].members) {
-			out[i].active = 0
 		}
 	}
 
