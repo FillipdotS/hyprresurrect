@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/FillipdotS/hyprresurrect/internal/apps"
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 	"github.com/FillipdotS/hyprresurrect/internal/snapshot"
 )
@@ -36,6 +38,7 @@ type Runner struct {
 	timeout time.Duration
 	poll    time.Duration
 	command func(pid int) ([]string, error)
+	details func(clients []hypr.Client) map[string]apps.Detail
 }
 
 const (
@@ -82,6 +85,14 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 			}
 		}
 
+		if running := runningTargets(snap); len(running) > 0 {
+			_, _ = fmt.Fprintf(r.Out, "\n-- these were running, and are not started again:\n")
+
+			for _, t := range running {
+				_, _ = fmt.Fprintf(r.Out, "   workspace %d: %s\n", t.workspace, t.program)
+			}
+		}
+
 		return err
 	}
 
@@ -97,7 +108,7 @@ func (r Runner) Run(snap snapshot.Snapshot) error {
 		return errors.Join(spawnErr, listErr)
 	}
 
-	resolved := r.resolve(live)
+	resolved := r.settleDetails(live)
 	claimed := claim(resolved, snap)
 
 	// Groups only after the moves: members have to share a workspace first.
@@ -136,16 +147,59 @@ func refresh(windows []liveWindow, clients []hypr.Client) []liveWindow {
 	return updated
 }
 
-// resolve tries to read back the command behind every live window
+// settleDetails resolves the live windows, waiting for the ones an app can look
+// into to become readable.
+//
+// A window maps before the process behind it has finished with it: a terminal's
+// shell is forked a moment later, and until it is there is no directory to
+// read. That directory is the only thing separating the windows of a single
+// instance, which report one identical argv between them, so the move pass
+// would otherwise place them by class alone and scatter them.
+func (r Runner) settleDetails(clients []hypr.Client) []liveWindow {
+	deadline := time.Now().Add(r.timeout)
+
+	for {
+		resolved := r.resolve(clients)
+
+		if readable(resolved) || !time.Now().Before(deadline) {
+			return resolved
+		}
+
+		time.Sleep(cmp.Or(r.poll, defaultPoll))
+	}
+}
+
+// readable reports whether every window an app owns has given up its detail.
+func readable(live []liveWindow) bool {
+	for _, w := range live {
+		if apps.Owns(w.Class) && w.Cwd == "" {
+			return false
+		}
+	}
+
+	return true
+}
+
+// resolve tries to read back the command behind every live window, and what is
+// going on inside the ones an app can look into.
 func (r Runner) resolve(clients []hypr.Client) []liveWindow {
 	commandOf := r.command
 	if commandOf == nil {
 		commandOf = snapshot.Command
 	}
 
+	detailsOf := r.details
+	if detailsOf == nil {
+		detailsOf = func(clients []hypr.Client) map[string]apps.Detail {
+			return apps.Inspect(clients, "/proc")
+		}
+	}
+
+	details := detailsOf(clients)
+
 	live := make([]liveWindow, len(clients))
 	for i, c := range clients {
-		live[i] = liveWindow{Client: c}
+		live[i] = liveWindow{Client: c, Detail: details[c.Address]}
 
 		if argv, err := commandOf(c.PID); err == nil {
 			live[i].Command = argv
@@ -169,11 +223,31 @@ func (r Runner) settle(snap snapshot.Snapshot, existing []hypr.Client) ([]hypr.C
 			return nil, err
 		}
 
-		if allAppeared(live, base, want) || !time.Now().Before(deadline) {
+		if allAppeared(live, base, want) {
+			return live, nil
+		}
+
+		if !time.Now().Before(deadline) {
+			r.reportMissing(live, base, want)
+
 			return live, nil
 		}
 
 		time.Sleep(cmp.Or(r.poll, defaultPoll))
+	}
+}
+
+// reportMissing names the windows that never turned up. Saying nothing would
+// leave a restore that quietly did nothing looking exactly like one that
+// worked: an app can accept a request to open a window and simply not, and
+// what follows here only ever works with the windows that did appear.
+func (r Runner) reportMissing(live []hypr.Client, existing, want map[string]int) {
+	have := clientClasses(live)
+
+	for _, class := range slices.Sorted(maps.Keys(want)) {
+		if short := want[class] - (have[class] - existing[class]); short > 0 {
+			_, _ = fmt.Fprintf(r.Out, "warning: %d %s window(s) never appeared\n", short, class)
+		}
 	}
 }
 
@@ -293,6 +367,11 @@ func bindings(windows []snapshot.Window) []binding {
 }
 
 func spawn(w snapshot.Window) string {
+	// The apps we can look inside build their own command line: a terminal
+	// reopens in the directory it was in, with what was running left at the
+	// prompt for the user to accept.
+	argv := apps.Launch(w.Class, w.Command, apps.Detail{Cwd: w.Cwd, Program: w.Program})
+
 	// "silent" puts the window on the workspace without making that workspace visible
 	rules := []string{"workspace = " + luaString(fmt.Sprintf("%d silent", w.Workspace))}
 
@@ -307,5 +386,5 @@ func spawn(w snapshot.Window) string {
 	rules = append(rules, "no_initial_focus = true")
 
 	return fmt.Sprintf("hl.exec_cmd(%s, {%s})",
-		luaString(shellCommand(w.Command)), strings.Join(rules, ", "))
+		luaString(shellCommand(argv)), strings.Join(rules, ", "))
 }

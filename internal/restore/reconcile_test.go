@@ -3,6 +3,7 @@ package restore
 import (
 	"testing"
 
+	"github.com/FillipdotS/hyprresurrect/internal/apps"
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 	"github.com/FillipdotS/hyprresurrect/internal/snapshot"
 	"github.com/google/go-cmp/cmp"
@@ -26,6 +27,67 @@ func live(address, class string, workspace int, command ...string) liveWindow {
 			Workspace: hypr.WorkspaceRef{ID: workspace},
 		},
 		Command: command,
+	}
+}
+
+// inDir is a live terminal that a command cannot separate from its neighbours,
+// only the directory it is open in.
+func inDir(address string, workspace int, cwd string) liveWindow {
+	w := live(address, "com.mitchellh.ghostty", workspace, "ghostty")
+	w.Detail = apps.Detail{Cwd: cwd}
+
+	return w
+}
+
+// The single-instance case. Every window reports the same argv, so the
+// directory is the only thing left to tell them apart - and the programs that
+// were running are gone by now, because a restore offers them at the prompt
+// rather than running them.
+func TestReconcileKeepsEachTerminalInItsOwnDirectory(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			{Class: "com.mitchellh.ghostty", Workspace: 3, Command: []string{"ghostty"},
+				Cwd: "/home/u/notes", Program: []string{"nvim"}},
+			{Class: "com.mitchellh.ghostty", Workspace: 5, Command: []string{"ghostty"},
+				Cwd: "/home/u/code", Program: []string{"btop"}},
+		},
+	}
+
+	windows := []liveWindow{
+		inDir("0xCODE", 3, "/home/u/code"),
+		inDir("0xNOTES", 5, "/home/u/notes"),
+	}
+
+	want := []Step{
+		{
+			What: "move com.mitchellh.ghostty to workspace 3",
+			Lua:  `hl.dispatch(hl.dsp.window.move({window = "address:0xNOTES", workspace = 3}))`,
+		},
+		{
+			What: "move com.mitchellh.ghostty to workspace 5",
+			Lua:  `hl.dispatch(hl.dsp.window.move({window = "address:0xCODE", workspace = 5}))`,
+		},
+	}
+
+	if diff := cmp.Diff(want, movesFor(windows, snap)); diff != "" {
+		t.Errorf("moves() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// Two windows open in the same directory really are interchangeable, so the one
+// already in place must be left where it is rather than swapped with the other.
+func TestReconcileLeavesTerminalsSharingADirectoryAlone(t *testing.T) {
+	snap := snapshot.Snapshot{
+		Windows: []snapshot.Window{
+			{Class: "com.mitchellh.ghostty", Workspace: 3, Command: []string{"ghostty"}, Cwd: "/home/u"},
+			{Class: "com.mitchellh.ghostty", Workspace: 5, Command: []string{"ghostty"}, Cwd: "/home/u"},
+		},
+	}
+
+	windows := []liveWindow{inDir("0x1", 3, "/home/u"), inDir("0x2", 5, "/home/u")}
+
+	if got := movesFor(windows, snap); len(got) != 0 {
+		t.Errorf("moves() = %v, want nothing to move", got)
 	}
 }
 

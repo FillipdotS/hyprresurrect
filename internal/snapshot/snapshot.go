@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FillipdotS/hyprresurrect/internal/apps"
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 )
 
@@ -34,6 +35,12 @@ type Window struct {
 
 	Group       int  `json:"group,omitempty"`       // from 1, 0 ungrouped; members follow in tab order
 	GroupActive bool `json:"groupActive,omitempty"` // was the raised tab
+
+	// Cwd and Program describe what was going on inside the window, for the
+	// apps we know how to look into. Command stays the raw argv, so a wrong
+	// guess here is still visible next to what it was guessed from.
+	Cwd     string   `json:"cwd,omitempty"`
+	Program []string `json:"program,omitempty"` // foreground process; restore offers it, never runs it
 }
 
 type source interface {
@@ -75,6 +82,7 @@ func capture(src source, procRoot string) (Snapshot, error) {
 	}
 
 	ordered, groups := groupOrder(clients)
+	details := apps.Inspect(clients, procRoot)
 
 	for _, c := range ordered {
 		cmd, err := command(procRoot, c.PID)
@@ -91,6 +99,10 @@ func capture(src source, procRoot string) (Snapshot, error) {
 			Size:      c.Size,
 			Floating:  c.Floating,
 			Command:   cmd,
+		}
+
+		if d, ok := details[c.Address]; ok {
+			w.Cwd, w.Program = d.Cwd, d.Program
 		}
 
 		if id := groups[c.Address]; id > 0 {

@@ -36,6 +36,14 @@ func pause() {
 // nested is the compositor under test, ready by the time any test runs.
 var nested *compositor
 
+// busAddress is the private D-Bus session every process the suite starts talks
+// to, set before the compositor comes up. An app with a single-instance mode
+// finds its already-running server over the session bus, so on the real bus a
+// ghostty the tests spawn would hand its window to the ghostty on the user's
+// desktop - outside the nested session, and outside anything the suite can
+// clean up.
+var busAddress string
+
 type compositor struct {
 	cmd     *exec.Cmd
 	dir     string        // its XDG_RUNTIME_DIR
@@ -64,6 +72,8 @@ func run(m *testing.M) int {
 		return 1
 	}
 	cleanup := func() {
+		unmountUnder(dir)
+
 		if err := os.RemoveAll(dir); err != nil {
 			fmt.Fprintf(os.Stderr, "e2e: leaving %s behind: %v\n", dir, err)
 		}
@@ -74,6 +84,15 @@ func run(m *testing.M) int {
 		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
 		return 1
 	}
+
+	b, err := startBus(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
+		return 1
+	}
+	defer b.stop()
+
+	busAddress = b.address
 
 	c, err := start(dir)
 	if err != nil {
@@ -94,6 +113,16 @@ func run(m *testing.M) int {
 	}()
 
 	if err := c.await(startTimeout); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
+
+		return 1
+	}
+
+	// What the bus starts on demand inherits the daemon's environment, which
+	// still points at the real desktop's wayland socket. Anything D-Bus
+	// activation launches has to become a client of the nested session, not of
+	// the session the suite was started from.
+	if err := c.exportActivationEnv(); err != nil {
 		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
 
 		return 1
@@ -125,7 +154,105 @@ func baseEnv(runtimeDir string, extra ...string) []string {
 		"HOME=" + os.Getenv("HOME"),
 		"PATH=" + os.Getenv("PATH"),
 		"XDG_RUNTIME_DIR=" + runtimeDir,
+		// The compositor's own env matters as much as any client's: a restore
+		// spawns through hl.exec_cmd, so the windows it brings back inherit
+		// hyprland's environment rather than the CLI's.
+		"DBUS_SESSION_BUS_ADDRESS=" + busAddress,
 	}, extra...)
+}
+
+// unmountUnder detaches anything mounted inside dir. A GTK client has the bus
+// start gvfs, which mounts a fuse filesystem into the runtime directory; the
+// directory cannot be removed while that is attached, so every run would leave
+// one behind.
+func unmountUnder(dir string) {
+	mounts, err := os.ReadFile("/proc/self/mounts")
+	if err != nil {
+		return
+	}
+
+	for _, line := range strings.Split(string(mounts), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		// Mount points are written with spaces and tabs escaped.
+		point := strings.NewReplacer(`\040`, " ", `\011`, "\t").Replace(fields[1])
+		if !strings.HasPrefix(point, dir+string(os.PathSeparator)) {
+			continue
+		}
+
+		for _, unmount := range []*exec.Cmd{
+			exec.Command("fusermount3", "-u", point),
+			exec.Command("fusermount", "-u", point),
+			exec.Command("umount", point),
+		} {
+			if unmount.Run() == nil {
+				break
+			}
+		}
+	}
+}
+
+// bus is the private D-Bus session daemon behind busAddress.
+type bus struct {
+	cmd     *exec.Cmd
+	address string
+}
+
+func startBus(dir string) (*bus, error) {
+	socket := filepath.Join(dir, "dbus.sock")
+
+	log, err := os.Create(filepath.Join(dir, "dbus.out"))
+	if err != nil {
+		return nil, fmt.Errorf("dbus log: %w", err)
+	}
+
+	// --nofork so the daemon stays a child we can signal; the address is ours
+	// to choose, which saves parsing it back out of the daemon's stdout.
+	cmd := exec.Command("dbus-daemon", "--session", "--nofork", "--address=unix:path="+socket)
+	cmd.Stdout, cmd.Stderr = log, log
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start dbus-daemon: %w", err)
+	}
+
+	b := &bus{cmd: cmd, address: "unix:path=" + socket}
+
+	deadline := time.Now().Add(startTimeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(socket); err == nil {
+			return b, nil
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	b.stop()
+
+	return nil, fmt.Errorf("dbus-daemon made no socket before the deadline\n--- dbus.out\n%s",
+		tail(filepath.Join(dir, "dbus.out"), 25))
+}
+
+// exportActivationEnv hands the bus the environment it should start services
+// in, which is the same one the tests give the windows they spawn themselves.
+func (c *compositor) exportActivationEnv() error {
+	cmd := exec.Command("dbus-update-activation-environment",
+		"WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_CONFIG_DIRS", "GIO_USE_VFS")
+	cmd.Env = c.clientEnv()
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("dbus-update-activation-environment: %w\n%s", err, out)
+	}
+
+	return nil
+}
+
+func (b *bus) stop() {
+	_ = syscall.Kill(-b.cmd.Process.Pid, syscall.SIGKILL)
+	_ = b.cmd.Wait()
 }
 
 func start(dir string) (*compositor, error) {
@@ -362,11 +489,6 @@ func (c *compositor) Spawn(t *testing.T, class string, args ...string) hypr.Clie
 func (c *compositor) SpawnTitled(t *testing.T, class, title string, args ...string) hypr.Client {
 	t.Helper()
 
-	existing := make(map[string]bool)
-	for _, client := range c.clients(t) {
-		existing[client.Address] = true
-	}
-
 	if len(args) == 0 {
 		args = []string{"sleep", "infinity"}
 	}
@@ -376,7 +498,20 @@ func (c *compositor) SpawnTitled(t *testing.T, class, title string, args ...stri
 		flags = append(flags, "--title="+title)
 	}
 
-	cmd := exec.Command("foot", append(append(flags, "-e"), args...)...)
+	return c.spawn(t, class, exec.Command("foot", append(append(flags, "-e"), args...)...))
+}
+
+// spawn runs cmd as a client of the nested compositor and returns the window it
+// maps. Callers build the command, since the flags that set a window's class
+// differ per program.
+func (c *compositor) spawn(t *testing.T, class string, cmd *exec.Cmd) hypr.Client {
+	t.Helper()
+
+	existing := make(map[string]bool)
+	for _, client := range c.clients(t) {
+		existing[client.Address] = true
+	}
+
 	cmd.Env = c.clientEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 

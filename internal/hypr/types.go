@@ -11,6 +11,11 @@ type Client struct {
 	PID       int          `json:"pid"`
 	Grouped   []string     `json:"grouped"` // group members in tab order, self included
 	Visible   bool         `json:"visible"` // the raised tab; true when ungrouped
+
+	// StableID is hyprland's per-window creation counter, in hex. Sorting by it
+	// recovers the order the windows were opened in, which is what pairs the
+	// windows of a single-instance app with the processes behind them.
+	StableID string `json:"stableId"`
 }
 
 type WorkspaceRef struct {

@@ -49,6 +49,7 @@ func TestClients(t *testing.T) {
 		PID:       2035226,
 		Grouped:   []string{},
 		Visible:   true,
+		StableID:  "18000c28",
 	}
 	if diff := cmp.Diff(want, got[0]); diff != "" {
 		t.Errorf("Clients()[0] mismatch (-want +got):\n%s", diff)

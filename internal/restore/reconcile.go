@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/FillipdotS/hyprresurrect/internal/apps"
 	"github.com/FillipdotS/hyprresurrect/internal/hypr"
 	"github.com/FillipdotS/hyprresurrect/internal/snapshot"
 )
@@ -14,6 +15,7 @@ import (
 // windows apart when one class runs several. This will be mostly terminals
 type liveWindow struct {
 	hypr.Client
+	apps.Detail
 	Command []string
 }
 
@@ -25,13 +27,17 @@ type liveWindow struct {
 // so exec_cmd's rules never attach to it and it lands on the active workspace.
 //
 // Each snapshot window claims the live window it describes, strongest evidence
-// first: an identical command before a shared class, and within each of
-// those the windows that are already on the right workspace before the ones
-// that would have to move. Command first is what keeps cliamp on its own
-// workspace instead of swapping it with the btop next to it. Class is only a
-// fallback, for the windows a command genuinely cannot separate - seven ghostty
-// windows sharing one pid report one identical argv, and those really are
-// interchangeable.
+// first: the directory a terminal is open in, then an identical command, then a
+// shared class, and within each of those the windows already on the right
+// workspace before the ones that would have to move. Command before class is
+// what keeps cliamp on its own workspace instead of swapping it with the btop
+// next to it.
+//
+// The directory comes first because it is the only thing that separates the
+// windows of a single instance, which report one identical argv between them.
+// What was running does not survive a restore - it is offered at the prompt,
+// not run - so the directory is all there is to match on, and two windows open
+// in the same one are genuinely interchangeable.
 //
 // Whatever is left unclaimed - the terminal the restore was started from,
 // anything opened since - is left alone.
@@ -44,7 +50,15 @@ func claim(live []liveWindow, snap snapshot.Snapshot) []int {
 	}
 	taken := make([]bool, len(live))
 
-	for _, pass := range []struct{ sameCommand, onTarget bool }{
+	// Directory before command, and on its own as well as alongside it: the
+	// windows this is for share one argv between them, and it is not even the
+	// argv the snapshot recorded - the instance serving them after a restore is
+	// rarely the one that was serving them before.
+	for _, pass := range []struct{ sameCommand, sameCwd, onTarget bool }{
+		{sameCwd: true, sameCommand: true, onTarget: true},
+		{sameCwd: true, sameCommand: true},
+		{sameCwd: true, onTarget: true},
+		{sameCwd: true},
 		{sameCommand: true, onTarget: true},
 		{sameCommand: true},
 		{onTarget: true},
@@ -60,6 +74,11 @@ func claim(live []liveWindow, snap snapshot.Snapshot) []int {
 					continue
 				}
 				if pass.sameCommand && !slices.Equal(l.Command, w.Command) {
+					continue
+				}
+				// An unknown directory on either side is not a match: two
+				// windows we know nothing about are not thereby the same one.
+				if pass.sameCwd && (l.Cwd == "" || l.Cwd != w.Cwd) {
 					continue
 				}
 				if pass.onTarget && l.Workspace.ID != w.Workspace {
@@ -212,6 +231,37 @@ func targets(snap snapshot.Snapshot) []target {
 		}
 
 		return strings.Compare(a.class, b.class)
+	})
+
+	return out
+}
+
+type runningTarget struct {
+	workspace int
+	program   string
+}
+
+// runningTargets lists what was running inside the windows a restore reopens
+// empty, for --dry-run. Nothing here is started again; naming it is the whole
+// point, so that a snapshot says what the session was doing even though putting
+// it back is left to whoever reads it.
+func runningTargets(snap snapshot.Snapshot) []runningTarget {
+	var out []runningTarget
+
+	for _, w := range snap.Windows {
+		if len(w.Program) == 0 {
+			continue
+		}
+
+		out = append(out, runningTarget{workspace: w.Workspace, program: shellCommand(w.Program)})
+	}
+
+	slices.SortFunc(out, func(a, b runningTarget) int {
+		if c := cmp.Compare(a.workspace, b.workspace); c != 0 {
+			return c
+		}
+
+		return strings.Compare(a.program, b.program)
 	})
 
 	return out
