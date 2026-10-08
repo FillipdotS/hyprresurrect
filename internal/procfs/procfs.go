@@ -1,6 +1,4 @@
-// Package procfs reads the handful of facts about a running process that the
-// rest of the tool needs. Every function takes the procfs root, which is
-// "/proc" outside of tests.
+// Package procfs reads process facts. root is "/proc" outside of tests.
 package procfs
 
 import (
@@ -128,23 +126,14 @@ func Status(root string, pid int) (parent, uid int, ok bool) {
 	return parent, uid, haveParent && haveUID
 }
 
-// A Stat is the part of /proc/<pid>/stat this tool reads.
 type Stat struct {
-	Parent int
-
-	// Tpgid is the process group in the foreground of the controlling
-	// terminal. Equal to the pid itself means an idle shell; -1 means the
-	// process has no terminal at all.
-	Tpgid int
-
-	// StartTime is in clock ticks since boot. Only the ordering matters here:
-	// it is what recovers the order a terminal's shells were created in.
+	Parent    int
+	Tpgid     int // terminal's foreground process group: own pid for an idle shell, -1 with no terminal
 	StartTime uint64
 }
 
-// ReadStat parses /proc/<pid>/stat. Its second field is a comm in parens which
-// may itself contain spaces and parens, so the fields are counted after the
-// last one rather than split from the front.
+// ReadStat parses /proc/<pid>/stat. The comm field may contain spaces and
+// parens, so fields are counted after the last ')'.
 func ReadStat(root string, pid int) (Stat, bool) {
 	b, err := os.ReadFile(Path(root, pid, "stat"))
 	if err != nil {
@@ -156,7 +145,7 @@ func ReadStat(root string, pid int) (Stat, bool) {
 		return Stat{}, false
 	}
 
-	// Field 3 (state) is now the first, so field N is at index N-3.
+	// Field N of stat(5) is at index N-3.
 	fields := strings.Fields(string(b[end+1:]))
 	if len(fields) < 20 {
 		return Stat{}, false
@@ -173,7 +162,6 @@ func ReadStat(root string, pid int) (Stat, bool) {
 	return Stat{Parent: parent, Tpgid: tpgid, StartTime: start}, true
 }
 
-// Children returns the pids whose parent is pid, in no particular order.
 func Children(root string, pid int) ([]int, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -188,7 +176,6 @@ func Children(root string, pid int) ([]int, error) {
 			continue
 		}
 
-		// A process that exits mid-scan is normal, not an error.
 		if stat, ok := ReadStat(root, child); ok && stat.Parent == pid {
 			children = append(children, child)
 		}
@@ -197,7 +184,6 @@ func Children(root string, pid int) ([]int, error) {
 	return children, nil
 }
 
-// Cwd returns the working directory pid is in right now.
 func Cwd(root string, pid int) (string, error) {
 	return os.Readlink(Path(root, pid, "cwd"))
 }

@@ -35,17 +35,9 @@ hyprresurrect version           # prints the installed version
 
 ## Terminal contents
 
-A terminal launched from a menu reports the same command whatever is running
-inside it, and ghostty's single instance serves every one of its windows from
-one process — so seven windows report one identical command between them. What
-tells them apart is the shell behind each window, with its own directory and its
-own foreground program, found by pairing the windows in the order hyprland
-created them with the shells in the order they started.
-
-A restore reopens each terminal **in the directory it was in**, through
-ghostty's own `+new-window`, so the windows come back on the one instance just
-as they were. Nothing is started for you: what was running is recorded, and
-`restore --dry-run` names it, but putting it back is your call.
+Ghostty windows reopen in the directory they were in, through ghostty's own
+`+new-window`. What was running in them is recorded and listed by
+`restore --dry-run`, but never started again:
 
 ```
 $ hyprresurrect restore --dry-run
@@ -55,12 +47,11 @@ $ hyprresurrect restore --dry-run
    workspace 3: herdr
 ```
 
-Two things are worth knowing. Ghostty splits and tabs are not covered — they put
-several shells behind one window, and rather than guess which one the window
-should reopen with, hyprresurrect records nothing for that window and restores
-it as it always did. And an instance that is running but has lost every window
-will accept the request to open one and then not open it; a restore says so
-rather than reporting success.
+With a single instance, every window shares one process, so each window is
+paired with its shell by creation order. If that instance has any tabs or
+splits the pairing is ambiguous, so its windows still come back on the right
+workspaces but open in the default directory. Windows started with
+`ghostty -e <cmd>` are relaunched with their original command.
 
 ## Contributing
 

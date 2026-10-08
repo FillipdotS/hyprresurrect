@@ -50,7 +50,7 @@ func TestPlanBindsWorkspacesBeforeSpawning(t *testing.T) {
 		},
 		{
 			What: "spawn com.mitchellh.ghostty",
-			Lua: `hl.exec_cmd("/usr/bin/ghostty", {workspace = "5 silent", ` +
+			Lua: `hl.exec_cmd("/usr/bin/ghostty +new-window", {workspace = "5 silent", ` +
 				`float = true, size = "713 629", move = "4 28", ` +
 				`no_initial_focus = true})`,
 		},

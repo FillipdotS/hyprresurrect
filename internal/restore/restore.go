@@ -38,7 +38,7 @@ type Runner struct {
 	timeout time.Duration
 	poll    time.Duration
 	command func(pid int) ([]string, error)
-	details func(clients []hypr.Client) map[string]apps.Detail
+	details func(clients []hypr.Client) (map[string]apps.Detail, bool)
 }
 
 const (
@@ -147,21 +147,16 @@ func refresh(windows []liveWindow, clients []hypr.Client) []liveWindow {
 	return updated
 }
 
-// settleDetails resolves the live windows, waiting for the ones an app can look
-// into to become readable.
-//
-// A window maps before the process behind it has finished with it: a terminal's
-// shell is forked a moment later, and until it is there is no directory to
-// read. That directory is the only thing separating the windows of a single
-// instance, which report one identical argv between them, so the move pass
-// would otherwise place them by class alone and scatter them.
+// settleDetails waits for the details of windows that just mapped: a
+// terminal's shell is forked a moment after its window, and without its cwd the
+// windows of a single instance can only be matched by class.
 func (r Runner) settleDetails(clients []hypr.Client) []liveWindow {
 	deadline := time.Now().Add(r.timeout)
 
 	for {
-		resolved := r.resolve(clients)
+		resolved, ready := r.resolve(clients)
 
-		if readable(resolved) || !time.Now().Before(deadline) {
+		if ready || !time.Now().Before(deadline) {
 			return resolved
 		}
 
@@ -169,20 +164,7 @@ func (r Runner) settleDetails(clients []hypr.Client) []liveWindow {
 	}
 }
 
-// readable reports whether every window an app owns has given up its detail.
-func readable(live []liveWindow) bool {
-	for _, w := range live {
-		if apps.Owns(w.Class) && w.Cwd == "" {
-			return false
-		}
-	}
-
-	return true
-}
-
-// resolve tries to read back the command behind every live window, and what is
-// going on inside the ones an app can look into.
-func (r Runner) resolve(clients []hypr.Client) []liveWindow {
+func (r Runner) resolve(clients []hypr.Client) ([]liveWindow, bool) {
 	commandOf := r.command
 	if commandOf == nil {
 		commandOf = snapshot.Command
@@ -190,12 +172,12 @@ func (r Runner) resolve(clients []hypr.Client) []liveWindow {
 
 	detailsOf := r.details
 	if detailsOf == nil {
-		detailsOf = func(clients []hypr.Client) map[string]apps.Detail {
+		detailsOf = func(clients []hypr.Client) (map[string]apps.Detail, bool) {
 			return apps.Inspect(clients, "/proc")
 		}
 	}
 
-	details := detailsOf(clients)
+	details, ready := detailsOf(clients)
 
 	live := make([]liveWindow, len(clients))
 	for i, c := range clients {
@@ -206,7 +188,7 @@ func (r Runner) resolve(clients []hypr.Client) []liveWindow {
 		}
 	}
 
-	return live
+	return live, ready
 }
 
 // settle waits for the spawned windows to exist
@@ -237,10 +219,8 @@ func (r Runner) settle(snap snapshot.Snapshot, existing []hypr.Client) ([]hypr.C
 	}
 }
 
-// reportMissing names the windows that never turned up. Saying nothing would
-// leave a restore that quietly did nothing looking exactly like one that
-// worked: an app can accept a request to open a window and simply not, and
-// what follows here only ever works with the windows that did appear.
+// reportMissing exists because an app can accept a request to open a window
+// and silently not, e.g. a ghostty instance that has lost all its windows.
 func (r Runner) reportMissing(live []hypr.Client, existing, want map[string]int) {
 	have := clientClasses(live)
 
@@ -367,9 +347,6 @@ func bindings(windows []snapshot.Window) []binding {
 }
 
 func spawn(w snapshot.Window) string {
-	// The apps we can look inside build their own command line: a terminal
-	// reopens in the directory it was in, with what was running left at the
-	// prompt for the user to accept.
 	argv := apps.Launch(w.Class, w.Command, apps.Detail{Cwd: w.Cwd, Program: w.Program})
 
 	// "silent" puts the window on the workspace without making that workspace visible

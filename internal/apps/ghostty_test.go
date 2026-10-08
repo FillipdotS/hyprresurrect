@@ -11,7 +11,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// fakeProc builds a procfs-shaped tree under a temp dir.
 type fakeProc struct{ root string }
 
 func newFakeProc(t *testing.T) *fakeProc {
@@ -20,8 +19,6 @@ func newFakeProc(t *testing.T) *fakeProc {
 	return &fakeProc{root: t.TempDir()}
 }
 
-// addProcess writes one process. A tpgid equal to pid is a shell sitting at its
-// prompt, and -1 is a process with no terminal at all.
 func (p *fakeProc) addProcess(t *testing.T, pid, ppid, tpgid int, start uint64, cwd string, argv ...string) {
 	t.Helper()
 
@@ -30,8 +27,6 @@ func (p *fakeProc) addProcess(t *testing.T, pid, ppid, tpgid int, start uint64, 
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 
-	// The fields after the comm, from state onwards. Only the three the reader
-	// looks at carry anything.
 	fields := make([]string, 20)
 	for i := range fields {
 		fields[i] = "0"
@@ -41,8 +36,6 @@ func (p *fakeProc) addProcess(t *testing.T, pid, ppid, tpgid int, start uint64, 
 	fields[5] = strconv.Itoa(tpgid)
 	fields[19] = strconv.FormatUint(start, 10)
 
-	// A comm containing spaces and parens is legal, and is why the fields are
-	// counted from the last ')' rather than split from the front.
 	stat := strconv.Itoa(pid) + " (ba(sh) x) " + strings.Join(fields, " ")
 	p.write(t, filepath.Join(dir, "stat"), stat)
 
@@ -69,8 +62,17 @@ func window(address, stableID string, pid int) hypr.Client {
 	return hypr.Client{Address: address, Class: ghosttyClass, PID: pid, StableID: stableID}
 }
 
-// One process, three windows, three shells: the oldest shell belongs to the
-// window created first, and nothing but the two orderings says so.
+func inspect(t *testing.T, windows []hypr.Client, root string, wantReady bool) map[string]Detail {
+	t.Helper()
+
+	got, ready := ghostty{}.Inspect(windows, root)
+	if ready != wantReady {
+		t.Errorf("Inspect() ready = %v, want %v", ready, wantReady)
+	}
+
+	return got
+}
+
 func TestGhosttyPairsWindowsWithShellsByAge(t *testing.T) {
 	proc := newFakeProc(t)
 
@@ -83,8 +85,7 @@ func TestGhosttyPairsWindowsWithShellsByAge(t *testing.T) {
 	proc.addProcess(t, 300, 201, 300, 21, "/home/u/first", "btop")
 	proc.addProcess(t, 301, 203, 301, 41, "/home/u/third", "herdr", "--follow")
 
-	// Given out of order, and the ids are hex: "f" is 15 where "10" is 16, so
-	// comparing them as text would put the first window second.
+	// Hex ids: "f" sorts after "10" as text.
 	windows := []hypr.Client{
 		window("0xC", "ff", 100),
 		window("0xA", "f", 100),
@@ -97,29 +98,42 @@ func TestGhosttyPairsWindowsWithShellsByAge(t *testing.T) {
 		"0xC": {Cwd: "/home/u/third", Program: []string{"herdr", "--follow"}},
 	}
 
-	if diff := cmp.Diff(want, ghostty{}.Inspect(windows, proc.root)); diff != "" {
+	if diff := cmp.Diff(want, inspect(t, windows, proc.root, true)); diff != "" {
 		t.Errorf("Inspect() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-// Splits and tabs put several shells behind one window. Nothing says which of
-// them the window should reopen with, so the answer is to say nothing.
-func TestGhosttyIgnoresAProcessWhoseShellsDoNotMatchItsWindows(t *testing.T) {
+func TestGhosttySkipsAnInstanceWithTabsButNotTheOthers(t *testing.T) {
 	proc := newFakeProc(t)
 
 	proc.addProcess(t, 100, 1, -1, 10, "", "/usr/bin/ghostty")
 	proc.addProcess(t, 201, 100, 201, 20, "/home/u/a", "/usr/bin/bash")
 	proc.addProcess(t, 202, 100, 202, 30, "/home/u/b", "/usr/bin/bash")
 
-	got := ghostty{}.Inspect([]hypr.Client{window("0xA", "1", 100)}, proc.root)
+	proc.addProcess(t, 500, 1, -1, 10, "", "/usr/bin/ghostty", "--class=com.mitchellh.ghostty")
+	proc.addProcess(t, 501, 500, 501, 20, "/home/u/c", "/usr/bin/bash")
 
-	if len(got) != 0 {
-		t.Errorf("Inspect() = %v, want nothing for a window with two shells", got)
+	windows := []hypr.Client{window("0xA", "1", 100), window("0xC", "2", 500)}
+	want := map[string]Detail{"0xC": {Cwd: "/home/u/c"}}
+
+	if diff := cmp.Diff(want, inspect(t, windows, proc.root, true)); diff != "" {
+		t.Errorf("Inspect() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-// A window with no creation id would take an arbitrary place in the ordering,
-// and pair a shell with the wrong window rather than none at all.
+func TestGhosttyIsNotReadyWhileAShellIsMissing(t *testing.T) {
+	proc := newFakeProc(t)
+
+	proc.addProcess(t, 100, 1, -1, 10, "", "/usr/bin/ghostty")
+	proc.addProcess(t, 201, 100, 201, 20, "/home/u/a", "/usr/bin/bash")
+
+	windows := []hypr.Client{window("0xA", "1", 100), window("0xB", "2", 100)}
+
+	if got := inspect(t, windows, proc.root, false); len(got) != 0 {
+		t.Errorf("Inspect() = %v, want nothing", got)
+	}
+}
+
 func TestGhosttyIgnoresWindowsItCannotOrder(t *testing.T) {
 	proc := newFakeProc(t)
 
@@ -129,15 +143,22 @@ func TestGhosttyIgnoresWindowsItCannotOrder(t *testing.T) {
 
 	windows := []hypr.Client{window("0xA", "1", 100), window("0xB", "", 100)}
 
-	got := ghostty{}.Inspect(windows, proc.root)
-
-	if len(got) != 0 {
+	if got := inspect(t, windows, proc.root, true); len(got) != 0 {
 		t.Errorf("Inspect() = %v, want nothing when a window has no stable id", got)
 	}
 }
 
-// Children that are not window shells - anything with no controlling terminal -
-// must not be counted as one.
+func TestGhosttyIgnoresAProcessStartedWithACommand(t *testing.T) {
+	proc := newFakeProc(t)
+
+	proc.addProcess(t, 100, 1, -1, 10, "", "/usr/bin/ghostty", "-e", "ncspot")
+	proc.addProcess(t, 201, 100, 201, 20, "/home/u", "ncspot")
+
+	if got := inspect(t, []hypr.Client{window("0xA", "1", 100)}, proc.root, true); len(got) != 0 {
+		t.Errorf("Inspect() = %v, want nothing for a ghostty -e", got)
+	}
+}
+
 func TestGhosttySkipsChildrenWithNoTerminal(t *testing.T) {
 	proc := newFakeProc(t)
 
@@ -147,7 +168,7 @@ func TestGhosttySkipsChildrenWithNoTerminal(t *testing.T) {
 
 	want := map[string]Detail{"0xA": {Cwd: "/home/u/a"}}
 
-	if diff := cmp.Diff(want, ghostty{}.Inspect([]hypr.Client{window("0xA", "1", 100)}, proc.root)); diff != "" {
+	if diff := cmp.Diff(want, inspect(t, []hypr.Client{window("0xA", "1", 100)}, proc.root, true)); diff != "" {
 		t.Errorf("Inspect() mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -168,22 +189,12 @@ func TestGhosttyLaunch(t *testing.T) {
 			want:   []string{saved, "+new-window", "--working-directory=/home/u/work"},
 		},
 		{
-			// Reopening a session should not start what was in it. The
-			// program is recorded, and --dry-run names it, but no more.
 			name:   "the program that was running is not passed on",
 			argv:   []string{saved},
 			detail: Detail{Cwd: "/home/u/work", Program: []string{"btop"}},
 			want:   []string{saved, "+new-window", "--working-directory=/home/u/work"},
 		},
 		{
-			name:   "the saved -e and everything after it is dropped",
-			argv:   []string{saved, "-e", "cliamp", "--loud"},
-			detail: Detail{Cwd: "/home/u/work", Program: []string{"cliamp"}},
-			want:   []string{saved, "+new-window", "--working-directory=/home/u/work"},
-		},
-		{
-			// Not a setting for the new window: it picks which running ghostty
-			// to ask, so dropping it would talk to the wrong one.
 			name:   "a custom class is kept, because it chooses the instance",
 			argv:   []string{saved, "--class=com.example.term", "--font-size=9"},
 			detail: Detail{Cwd: "/home/u/work"},
@@ -191,10 +202,16 @@ func TestGhosttyLaunch(t *testing.T) {
 				"--working-directory=/home/u/work"},
 		},
 		{
-			name:   "a window we learned nothing about is left as it was",
-			argv:   []string{saved, "--gtk-single-instance=true"},
+			name:   "a window with no detail still opens a new window",
+			argv:   []string{saved, "--gtk-single-instance=true", "--initial-window=false"},
 			detail: Detail{},
-			want:   []string{saved, "--gtk-single-instance=true"},
+			want:   []string{saved, "+new-window"},
+		},
+		{
+			name:   "a ghostty started with -e is replayed as is",
+			argv:   []string{saved, "--gtk-single-instance=true", "-e", "ncspot"},
+			detail: Detail{},
+			want:   []string{saved, "--gtk-single-instance=true", "-e", "ncspot"},
 		},
 	}
 
@@ -207,7 +224,6 @@ func TestGhosttyLaunch(t *testing.T) {
 	}
 }
 
-// The registry only speaks for the classes it knows.
 func TestLaunchLeavesUnknownClassesAlone(t *testing.T) {
 	argv := []string{"/usr/lib/firefox/firefox"}
 
@@ -224,9 +240,7 @@ func TestInspectIgnoresClassesNoAppOwns(t *testing.T) {
 
 	windows := []hypr.Client{{Address: "0xA", Class: "foot", PID: 100, StableID: "1"}}
 
-	got := Inspect(windows, proc.root)
-
-	if len(got) != 0 {
+	if got, _ := Inspect(windows, proc.root); len(got) != 0 {
 		t.Errorf("Inspect() = %v, want nothing for a class no app owns", got)
 	}
 }

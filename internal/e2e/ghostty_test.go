@@ -19,21 +19,9 @@ import (
 
 const ghosttyClass = "com.mitchellh.ghostty"
 
-// Ghostty is the case terminal restoration exists for: with a single instance
-// one process serves every window, so every window reports the same argv and
-// the snapshot cannot tell one running btop from an idle one. What separates
-// them is the shell behind each window, with its own pty, cwd and foreground
-// process.
-//
-// A restore reopens each window in the directory it was in, through the running
-// ghostty's own IPC, and starts nothing: what was running is recorded and named
-// by --dry-run, but putting it back is left to whoever reads it.
 func TestGhostty(t *testing.T) {
 	hr := setup(t)
 
-	// Not a skip: nothing runs this suite in CI, so a missing ghostty means
-	// the question went unanswered on a machine that could not answer it, and
-	// saying nothing would read as a pass.
 	if _, err := exec.LookPath("ghostty"); err != nil {
 		t.Fatalf("ghostty is not installed, so the terminal round trip cannot be tested: %v", err)
 	}
@@ -46,15 +34,11 @@ func TestGhostty(t *testing.T) {
 		idle  = tempDir(t)
 	)
 
-	// A shell puts its job in a process group of its own, out of reach of the
-	// group kill that takes the terminal down, so a test that fails part way
-	// through would leave these behind.
+	// Jobs get their own process group, so killing ghostty does not reach them.
 	t.Cleanup(func() { killMarkers(t, "sleep 999901", "sleep 999902") })
 
-	// The windows a restore opens belong to an instance started by the bus,
-	// which has its own idea about asking before closing a surface and no way
-	// to be told otherwise over the IPC. Taking the whole instance down is what
-	// leaves the compositor empty for the next test.
+	// The restored windows belong to a bus-started instance that asks before
+	// closing a surface, so the whole instance is killed instead.
 	t.Cleanup(func() { killGhostty(t, host) })
 
 	nested.FocusWorkspace(t, 1)
@@ -66,8 +50,6 @@ func TestGhostty(t *testing.T) {
 	nested.FocusWorkspace(t, 3)
 	third := nested.SpawnGhosttyWindow(t, other, "sleep", "999902")
 
-	// The premise. If ghostty ever stops sharing a process between windows this
-	// feature is pointless, and this test should be what says so.
 	if first.PID != second.PID || second.PID != third.PID {
 		t.Fatalf("the three windows report pids %d, %d and %d, want one shared process",
 			first.PID, second.PID, third.PID)
@@ -78,8 +60,6 @@ func TestGhostty(t *testing.T) {
 			"reached the desktop's single-instance server instead of our private bus", first.PID)
 	}
 
-	// A shell reports its job as the foreground one only once it has forked it,
-	// which is a moment after the window maps.
 	awaitForeground(t, first.PID, "sleep 999901", "sleep 999902")
 
 	want := []string{
@@ -94,8 +74,6 @@ func TestGhostty(t *testing.T) {
 		t.Fatalf("the save did not describe what was in each window (-want +got):\n%s", diff)
 	}
 
-	// Each window reopens where it was, and the plan says what it will not be
-	// starting again.
 	plan := hr.Run("restore", "--dry-run")
 	for _, fragment := range []string{
 		"+new-window --working-directory=" + busy,
@@ -114,20 +92,14 @@ func TestGhostty(t *testing.T) {
 
 	nested.CloseAllWindows(t)
 
-	// The state a restore actually runs in: nothing of ours left running, so
-	// the bus has to start ghostty again. An instance that is up but has lost
-	// every window accepts the request to open one and then does not, so
-	// restoring into one would prove nothing.
+	// An instance left running with no windows ignores +new-window, so restore
+	// from cold, as after a reboot.
 	killGhostty(t, host)
 
 	hr.Run("restore")
 
-	// A restored window maps before ghostty has forked the shell behind it, and
-	// until it has there is nothing to read a directory out of.
 	awaitShells(t, 3)
 
-	// Saving again is what shows the pairing survived: every window back on its
-	// own workspace in its own directory, with nothing running in any of them.
 	hr.Run("save")
 
 	wantBack := []string{
@@ -140,8 +112,6 @@ func TestGhostty(t *testing.T) {
 		t.Fatalf("the terminals did not survive the round trip (-want +got):\n%s", diff)
 	}
 
-	// The windows came back through the running ghostty rather than as processes
-	// of their own, which is the point of going through its IPC.
 	restored := onWorkspace(t, 2)
 
 	if restored.PID != onWorkspace(t, 1).PID || restored.PID != onWorkspace(t, 3).PID {
@@ -153,8 +123,6 @@ func TestGhostty(t *testing.T) {
 	}
 }
 
-// awaitShells waits until there are want ghostty windows and every one of them
-// has its shell.
 func awaitShells(t *testing.T, want int) {
 	t.Helper()
 
@@ -191,7 +159,6 @@ func awaitShells(t *testing.T, want int) {
 	t.Fatalf("after %v there are not %d ghostty windows each with a shell", waitTimeout, want)
 }
 
-// shells counts the children of pid that own a terminal.
 func shells(t *testing.T, pid int) int {
 	t.Helper()
 
@@ -215,8 +182,6 @@ func shells(t *testing.T, pid int) int {
 	return count
 }
 
-// awaitForeground waits until every one of want is running in one of pid's
-// shells.
 func awaitForeground(t *testing.T, pid int, want ...string) {
 	t.Helper()
 
@@ -242,19 +207,13 @@ func awaitForeground(t *testing.T, pid int, want ...string) {
 	t.Fatalf("after %v the shells of pid %d are running %v, want %v", waitTimeout, pid, running, want)
 }
 
-// SpawnGhosttyServer opens the window that starts ghostty, which every later
-// window is then served by. Its shell is left idle: a server started with -e
-// answers the new-window IPC without opening anything, so the windows running
-// something have to come from SpawnGhosttyWindow.
+// SpawnGhosttyServer starts the single instance with an idle shell: a server
+// started with -e ignores +new-window.
 func (c *compositor) SpawnGhosttyServer(t *testing.T, dir string) hypr.Client {
 	t.Helper()
 
-	// Single instance forced on: it is off by default when ghostty is started
-	// from a terminal, and one process behind every window is the whole point.
-	//
-	// The windows opened later inherit this configuration, which is the only
-	// way to reach them: ghostty asks before closing a window with something
-	// running in it, and a test cannot answer.
+	// Single instance is off by default when started from a terminal.
+	// Later windows inherit confirm-close-surface; nothing else can set it.
 	return c.spawnGhostty(t, []string{
 		"--gtk-single-instance=true",
 		"--confirm-close-surface=false",
@@ -262,8 +221,6 @@ func (c *compositor) SpawnGhosttyServer(t *testing.T, dir string) hypr.Client {
 	})
 }
 
-// SpawnGhosttyWindow opens a window in the running ghostty over its IPC, the
-// path a desktop keybind takes.
 func (c *compositor) SpawnGhosttyWindow(t *testing.T, dir string, args ...string) hypr.Client {
 	t.Helper()
 
@@ -276,13 +233,9 @@ func (c *compositor) spawnGhostty(t *testing.T, args []string) hypr.Client {
 	return c.spawn(t, ghosttyClass, exec.Command("ghostty", args...))
 }
 
-// ghosttyArgs runs args as the foreground job of an interactive shell, or an
-// idle shell when there are none.
-//
-// bash -c execs over itself given a single command, leaving no shell and no job
-// control, and without job control the program shares the shell's process group
-// so the pty never names it as the foreground one. The trailing `true` is what
-// stops that.
+// ghosttyArgs runs args as the foreground job of an interactive shell. The
+// trailing `true` stops bash -c from exec'ing a single command, which would
+// leave no shell for the job to be in the foreground of.
 func ghosttyArgs(dir string, args []string) []string {
 	shell := []string{"bash", "-i"}
 	if len(args) > 0 {
@@ -292,8 +245,6 @@ func ghosttyArgs(dir string, args []string) []string {
 	return append([]string{"--working-directory=" + dir, "-e"}, shell...)
 }
 
-// terminals describes every ghostty window in a snapshot as "wsN <cwd>
-// <program>", so a diff names what changed rather than which struct field did.
 func terminals(snap snapshot.Snapshot) []string {
 	var out []string
 
@@ -329,8 +280,6 @@ func onWorkspace(t *testing.T, workspace int) hypr.Client {
 	return hypr.Client{}
 }
 
-// foreground is what is running in each of pid's shells, read straight out of
-// procfs rather than through the code under test.
 func foreground(t *testing.T, pid int) []string {
 	t.Helper()
 
@@ -363,7 +312,6 @@ func foreground(t *testing.T, pid int) []string {
 	return running
 }
 
-// state is the single-letter run state from /proc/<pid>/stat.
 func state(pid string) string {
 	stat, err := os.ReadFile(filepath.Join("/proc", pid, "stat"))
 	if err != nil {
@@ -383,9 +331,6 @@ func state(pid string) string {
 	return fields[0]
 }
 
-// shellStat reads the parent pid and foreground process group out of
-// /proc/<pid>/stat, whose second field is a comm in parens that may itself hold
-// spaces and parens - so the fields are counted after the last one.
 func shellStat(pid string) (parent, tpgid int, ok bool) {
 	stat, err := os.ReadFile(filepath.Join("/proc", pid, "stat"))
 	if err != nil {
@@ -408,8 +353,6 @@ func shellStat(pid string) (parent, tpgid int, ok bool) {
 	return parent, tpgid, errParent == nil && errTpgid == nil
 }
 
-// killGhostty takes down every ghostty except the ones that were already
-// running before the suite started.
 func killGhostty(t *testing.T, keep map[int]bool) {
 	t.Helper()
 
@@ -437,7 +380,6 @@ func killGhostty(t *testing.T, keep map[int]bool) {
 	t.Fatalf("a ghostty of ours was still running after %v", waitTimeout)
 }
 
-// killMarkers kills whatever is still running one of the test's own commands.
 func killMarkers(t *testing.T, markers ...string) {
 	t.Helper()
 
@@ -464,8 +406,6 @@ func killMarkers(t *testing.T, markers ...string) {
 	}
 }
 
-// ghosttyPids is every ghostty already running, which the ones we spawn must
-// not turn out to be.
 func ghosttyPids(t *testing.T) map[int]bool {
 	t.Helper()
 
@@ -487,9 +427,6 @@ func ghosttyPids(t *testing.T) map[int]bool {
 			continue
 		}
 
-		// A killed process the suite has not reaped yet keeps its name in
-		// procfs, and counting those as running means waiting for something
-		// that has already gone.
 		if state(e.Name()) == "Z" {
 			continue
 		}
@@ -500,8 +437,7 @@ func ghosttyPids(t *testing.T) map[int]bool {
 	return pids
 }
 
-// tempDir is t.TempDir() with its symlinks resolved, because a cwd read back
-// out of procfs is always fully resolved.
+// tempDir resolves symlinks, as a cwd read from procfs always is.
 func tempDir(t *testing.T) string {
 	t.Helper()
 

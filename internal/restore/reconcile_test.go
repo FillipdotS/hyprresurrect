@@ -30,8 +30,6 @@ func live(address, class string, workspace int, command ...string) liveWindow {
 	}
 }
 
-// inDir is a live terminal that a command cannot separate from its neighbours,
-// only the directory it is open in.
 func inDir(address string, workspace int, cwd string) liveWindow {
 	w := live(address, "com.mitchellh.ghostty", workspace, "ghostty")
 	w.Detail = apps.Detail{Cwd: cwd}
@@ -39,10 +37,6 @@ func inDir(address string, workspace int, cwd string) liveWindow {
 	return w
 }
 
-// The single-instance case. Every window reports the same argv, so the
-// directory is the only thing left to tell them apart - and the programs that
-// were running are gone by now, because a restore offers them at the prompt
-// rather than running them.
 func TestReconcileKeepsEachTerminalInItsOwnDirectory(t *testing.T) {
 	snap := snapshot.Snapshot{
 		Windows: []snapshot.Window{
@@ -74,8 +68,6 @@ func TestReconcileKeepsEachTerminalInItsOwnDirectory(t *testing.T) {
 	}
 }
 
-// Two windows open in the same directory really are interchangeable, so the one
-// already in place must be left where it is rather than swapped with the other.
 func TestReconcileLeavesTerminalsSharingADirectoryAlone(t *testing.T) {
 	snap := snapshot.Snapshot{
 		Windows: []snapshot.Window{

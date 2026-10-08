@@ -31,13 +31,8 @@ type liveWindow struct {
 // shared class, and within each of those the windows already on the right
 // workspace before the ones that would have to move. Command before class is
 // what keeps cliamp on its own workspace instead of swapping it with the btop
-// next to it.
-//
-// The directory comes first because it is the only thing that separates the
-// windows of a single instance, which report one identical argv between them.
-// What was running does not survive a restore - it is offered at the prompt,
-// not run - so the directory is all there is to match on, and two windows open
-// in the same one are genuinely interchangeable.
+// next to it. The directory is the only thing separating the windows of a
+// single instance, which share one argv.
 //
 // Whatever is left unclaimed - the terminal the restore was started from,
 // anything opened since - is left alone.
@@ -50,10 +45,8 @@ func claim(live []liveWindow, snap snapshot.Snapshot) []int {
 	}
 	taken := make([]bool, len(live))
 
-	// Directory before command, and on its own as well as alongside it: the
-	// windows this is for share one argv between them, and it is not even the
-	// argv the snapshot recorded - the instance serving them after a restore is
-	// rarely the one that was serving them before.
+	// Directory without command too: the instance serving the windows after a
+	// restore rarely has the argv of the one that served them before.
 	for _, pass := range []struct{ sameCommand, sameCwd, onTarget bool }{
 		{sameCwd: true, sameCommand: true, onTarget: true},
 		{sameCwd: true, sameCommand: true},
@@ -76,8 +69,6 @@ func claim(live []liveWindow, snap snapshot.Snapshot) []int {
 				if pass.sameCommand && !slices.Equal(l.Command, w.Command) {
 					continue
 				}
-				// An unknown directory on either side is not a match: two
-				// windows we know nothing about are not thereby the same one.
 				if pass.sameCwd && (l.Cwd == "" || l.Cwd != w.Cwd) {
 					continue
 				}
@@ -241,10 +232,8 @@ type runningTarget struct {
 	program   string
 }
 
-// runningTargets lists what was running inside the windows a restore reopens
-// empty, for --dry-run. Nothing here is started again; naming it is the whole
-// point, so that a snapshot says what the session was doing even though putting
-// it back is left to whoever reads it.
+// runningTargets lists what was running in the terminals a restore reopens
+// empty, for --dry-run.
 func runningTargets(snap snapshot.Snapshot) []runningTarget {
 	var out []runningTarget
 

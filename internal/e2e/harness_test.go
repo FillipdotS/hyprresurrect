@@ -36,12 +36,8 @@ func pause() {
 // nested is the compositor under test, ready by the time any test runs.
 var nested *compositor
 
-// busAddress is the private D-Bus session every process the suite starts talks
-// to, set before the compositor comes up. An app with a single-instance mode
-// finds its already-running server over the session bus, so on the real bus a
-// ghostty the tests spawn would hand its window to the ghostty on the user's
-// desktop - outside the nested session, and outside anything the suite can
-// clean up.
+// busAddress is a private D-Bus session, so a single-instance app the tests
+// spawn doesn't hand its window to the one on the real desktop.
 var busAddress string
 
 type compositor struct {
@@ -118,10 +114,7 @@ func run(m *testing.M) int {
 		return 1
 	}
 
-	// What the bus starts on demand inherits the daemon's environment, which
-	// still points at the real desktop's wayland socket. Anything D-Bus
-	// activation launches has to become a client of the nested session, not of
-	// the session the suite was started from.
+	// Otherwise bus-activated apps open on the real desktop's wayland socket.
 	if err := c.exportActivationEnv(); err != nil {
 		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
 
@@ -154,17 +147,13 @@ func baseEnv(runtimeDir string, extra ...string) []string {
 		"HOME=" + os.Getenv("HOME"),
 		"PATH=" + os.Getenv("PATH"),
 		"XDG_RUNTIME_DIR=" + runtimeDir,
-		// The compositor's own env matters as much as any client's: a restore
-		// spawns through hl.exec_cmd, so the windows it brings back inherit
-		// hyprland's environment rather than the CLI's.
+		// Restored windows inherit hyprland's env through hl.exec_cmd.
 		"DBUS_SESSION_BUS_ADDRESS=" + busAddress,
 	}, extra...)
 }
 
-// unmountUnder detaches anything mounted inside dir. A GTK client has the bus
-// start gvfs, which mounts a fuse filesystem into the runtime directory; the
-// directory cannot be removed while that is attached, so every run would leave
-// one behind.
+// unmountUnder detaches the gvfs fuse mount GTK clients leave in the runtime
+// dir, which otherwise can't be removed.
 func unmountUnder(dir string) {
 	mounts, err := os.ReadFile("/proc/self/mounts")
 	if err != nil {
@@ -177,7 +166,6 @@ func unmountUnder(dir string) {
 			continue
 		}
 
-		// Mount points are written with spaces and tabs escaped.
 		point := strings.NewReplacer(`\040`, " ", `\011`, "\t").Replace(fields[1])
 		if !strings.HasPrefix(point, dir+string(os.PathSeparator)) {
 			continue
@@ -195,7 +183,6 @@ func unmountUnder(dir string) {
 	}
 }
 
-// bus is the private D-Bus session daemon behind busAddress.
 type bus struct {
 	cmd     *exec.Cmd
 	address string
@@ -209,8 +196,6 @@ func startBus(dir string) (*bus, error) {
 		return nil, fmt.Errorf("dbus log: %w", err)
 	}
 
-	// --nofork so the daemon stays a child we can signal; the address is ours
-	// to choose, which saves parsing it back out of the daemon's stdout.
 	cmd := exec.Command("dbus-daemon", "--session", "--nofork", "--address=unix:path="+socket)
 	cmd.Stdout, cmd.Stderr = log, log
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -236,8 +221,6 @@ func startBus(dir string) (*bus, error) {
 		tail(filepath.Join(dir, "dbus.out"), 25))
 }
 
-// exportActivationEnv hands the bus the environment it should start services
-// in, which is the same one the tests give the windows they spawn themselves.
 func (c *compositor) exportActivationEnv() error {
 	cmd := exec.Command("dbus-update-activation-environment",
 		"WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_CONFIG_DIRS", "GIO_USE_VFS")
@@ -502,8 +485,7 @@ func (c *compositor) SpawnTitled(t *testing.T, class, title string, args ...stri
 }
 
 // spawn runs cmd as a client of the nested compositor and returns the window it
-// maps. Callers build the command, since the flags that set a window's class
-// differ per program.
+// maps.
 func (c *compositor) spawn(t *testing.T, class string, cmd *exec.Cmd) hypr.Client {
 	t.Helper()
 
